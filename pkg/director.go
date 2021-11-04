@@ -59,17 +59,17 @@ func (d *EventDirector) OnReceived(ctx EventContext, header EventHeader, packet 
 	}()
 	// select filter
 	effective := d.effectFilters[header.EventType]
-	filters := make([]EventFilter, 0, len(d.globalFilters)+len(effective))
+	filters := make([]EventFilter, len(d.globalFilters), len(d.globalFilters)+len(effective))
 	copy(filters, d.globalFilters)
 	for _, f := range effective {
 		filters = append(filters, f)
 	}
 	// do filter
-	_ = d.makeFilterChain(func(bh EventHeader) (err error) {
+	_ = d.makeFilterChain(func(eh EventHeader) (err error) {
 		if ctx.Async() {
-			err = d.work(bh, packet)
+			err = d.work(eh, packet)
 		} else {
-			err = d.workers.Process([]interface{}{bh, packet}).(error)
+			err = d.workers.Process([]interface{}{eh, packet}).(error)
 		}
 		if err != nil {
 			Log().Errorf("handle/filter event, error: %s", err)
