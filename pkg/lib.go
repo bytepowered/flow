@@ -22,7 +22,7 @@ type EventHeader struct {
 // Event 事件消息
 type Event interface {
 	Header() EventHeader
-	Message() interface{}
+	Object() interface{}
 	Type() reflect.Type
 }
 

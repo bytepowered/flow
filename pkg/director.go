@@ -28,7 +28,7 @@ func NewEventDirector(opts ...DirectorOption) *EventDirector {
 	fd := &EventDirector{
 		dispatchers:   make(map[string]Dispatcher, 2),
 		adapters:      make(map[string]Adapter, 2),
-		globalFilters: make([]EventFilter, 2),
+		globalFilters: make([]EventFilter, 0, 4),
 		effectFilters: make(map[EventType][]TypedEventFilter, 2),
 		transformers:  make(map[Vendor]Transformer, 2),
 	}
@@ -125,7 +125,7 @@ func (d *EventDirector) InjectFormatters(formatters []Transformer) {
 func (d *EventDirector) InjectGlobalFilters(filters []EventFilter) {
 	Log().Infof("server add global filters: %d", len(filters))
 	for _, f := range filters {
-		// 忽略EffectiveFilter
+		// 忽略Effective TypedEventFilter
 		if _, is := f.(TypedEventFilter); is {
 			continue
 		}
