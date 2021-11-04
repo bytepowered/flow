@@ -5,16 +5,31 @@ import (
 	"reflect"
 )
 
+// Origin 表示事件来源
+type Origin uint8
+
+func (o Origin) String() string {
+	return OriginName(o)
+}
+
 // Vendor 表示事件来源厂商
 type Vendor uint16
+
+func (v Vendor) String() string {
+	return VendorName(v)
+}
 
 // EventType 表示事件类型
 type EventType uint16
 
+func (e EventType) String() string {
+	return EventTypeName(e)
+}
+
 // EventHeader 行情数据Header
 type EventHeader struct {
 	RecvTime  int64     `json:"recvTime"`  // 接收数据的系统时间戳，精确到纳秒
-	Origin    uint8     `json:"origin"`    // 来源类型
+	Origin    Origin    `json:"origin"`    // 来源类型
 	Vendor    Vendor    `json:"vendor"`    // 所属厂商
 	EventType EventType `json:"eventType"` // 事件类型
 }

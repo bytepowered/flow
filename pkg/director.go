@@ -57,6 +57,12 @@ func (d *EventDirector) OnReceived(ctx EventContext, header EventHeader, packet 
 			Log().Errorf("unexcepted panic error: %s", err)
 		}
 	}()
+	metrics := Metrics()
+	const mstage = "director"
+	mroute := metrics.NewTimer(mstage, "route")
+	defer mroute.ObserveDuration()
+	source := header.Origin.String() + "_" + header.Vendor.String()
+	metrics.NewCounter(source, header.EventType.String()).Inc()
 	// select filter
 	effective := d.effectFilters[header.EventType]
 	filters := make([]EventFilter, len(d.globalFilters), len(d.globalFilters)+len(effective))
@@ -65,7 +71,9 @@ func (d *EventDirector) OnReceived(ctx EventContext, header EventHeader, packet 
 		filters = append(filters, f)
 	}
 	// do filter
+	mfilter := metrics.NewTimer(mstage, "filter")
 	_ = d.makeFilterChain(func(eh EventHeader) (err error) {
+		mfilter.ObserveDuration()
 		if ctx.Async() {
 			err = d.work(eh, packet)
 		} else {
