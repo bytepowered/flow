@@ -1,4 +1,4 @@
-module flowx
+module github.com/bytepowered/flow
 
 go 1.16
 
