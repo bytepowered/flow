@@ -69,7 +69,9 @@ func (d *EventDirector) OnReceived(ctx EventContext, header EventHeader, packet 
 		if ctx.Async() {
 			err = d.work(eh, packet)
 		} else {
-			err = d.workers.Process([]interface{}{eh, packet}).(error)
+			if e := d.workers.Process([]interface{}{eh, packet}); e != nil {
+				err = e.(error)
+			}
 		}
 		if err != nil {
 			Log().Errorf("handle/filter event, error: %s", err)
