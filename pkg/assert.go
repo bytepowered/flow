@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	assertPrefix = "CRITICAL:ASSERT:"
+	assertPrefix = "FLOW:CRITICAL:ASSERT:"
 )
 
 var (
