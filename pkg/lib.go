@@ -58,29 +58,29 @@ type EventContext interface {
 	Async() bool
 }
 
-// EventHandler Event处理接口
-type EventHandler interface {
-	// OnReceived 当Adapter接收到Event数据时，调用此方法来处理。
+// EventDeliverFunc Event处理接口
+type EventDeliverFunc interface {
+	// Deliver 当Adapter接收到Event数据时，调用此方法来投递事件。
 	//    ctx Event上下文
 	//    header EventHeader
 	//    packet Event负载部分的数据。应当不包含Header数据。
-	OnReceived(ctx EventContext, header EventHeader, packet []byte)
+	Deliver(ctx EventContext, header EventHeader, packet []byte)
 }
 
-// EventFilterInvoker 执行过滤原始Event的函数；
-type EventFilterInvoker func(header EventHeader) error
+// EventFilterFunc 执行过滤原始Event的函数；
+type EventFilterFunc func(header EventHeader) error
 
 // EventFilter 原始Event过滤接口
 type EventFilter interface {
-	DoFilter(next EventFilterInvoker) EventFilterInvoker
+	DoFilter(next EventFilterFunc) EventFilterFunc
 }
 
-// TypedEventFilter 针对特定类型原始数据进行过滤接口
-type TypedEventFilter interface {
+// EffectEventFilter 针对特定类型原始数据进行过滤接口
+type EffectEventFilter interface {
 	// EffectON 在特定Event类型下生效
 	EffectON() EventType
 	// DoFilter 执行Event过滤
-	DoFilter(next EventFilterInvoker) EventFilterInvoker
+	DoFilter(next EventFilterFunc) EventFilterFunc
 }
 
 // Transformer 处理Event格式转换
@@ -96,7 +96,7 @@ type Adapter interface {
 	// AdapterId 适配接口实现具体类型的ID
 	AdapterId() string
 	// SetEventHandler 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
-	SetEventHandler(handler EventHandler)
+	SetEventDeliverFunc(handler EventDeliverFunc)
 }
 
 // Dispatcher Event派发处理接口
@@ -104,5 +104,5 @@ type Dispatcher interface {
 	// DispatcherId 派发处理接口实现具体类型的ID
 	DispatcherId() string
 	// Dispatch 执行Event派发处理
-	Dispatch(message Event) error
+	Dispatch(event Event) error
 }

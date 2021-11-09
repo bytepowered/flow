@@ -8,9 +8,9 @@ import (
 )
 
 var (
-	_ EventHandler   = new(EventDirector)
-	_ runv.Initable  = new(EventDirector)
-	_ runv.Component = new(EventDirector)
+	_ EventDeliverFunc = new(EventDirector)
+	_ runv.Initable    = new(EventDirector)
+	_ runv.Component   = new(EventDirector)
 )
 
 type DirectorOption func(director *EventDirector)
@@ -20,7 +20,7 @@ type EventDirector struct {
 	dispatchers   map[string]Dispatcher
 	adapters      map[string]Adapter
 	globalFilters []EventFilter
-	effectFilters map[EventType][]TypedEventFilter
+	effectFilters map[EventType][]EffectEventFilter
 	transformers  map[Vendor]Transformer
 }
 
@@ -29,7 +29,7 @@ func NewEventDirector(opts ...DirectorOption) *EventDirector {
 		dispatchers:   make(map[string]Dispatcher, 2),
 		adapters:      make(map[string]Adapter, 2),
 		globalFilters: make([]EventFilter, 0, 4),
-		effectFilters: make(map[EventType][]TypedEventFilter, 2),
+		effectFilters: make(map[EventType][]EffectEventFilter, 2),
 		transformers:  make(map[Vendor]Transformer, 2),
 	}
 	fd.workers = tunny.NewFunc(10_000, func(i interface{}) interface{} {
@@ -46,12 +46,12 @@ func NewEventDirector(opts ...DirectorOption) *EventDirector {
 func (d *EventDirector) OnInit() error {
 	// bind binary handler
 	for _, adapter := range d.adapters {
-		adapter.SetEventHandler(d)
+		adapter.SetEventDeliverFunc(d)
 	}
 	return nil
 }
 
-func (d *EventDirector) OnReceived(ctx EventContext, header EventHeader, packet []byte) {
+func (d *EventDirector) Deliver(ctx EventContext, header EventHeader, packet []byte) {
 	defer func() {
 		if err := recover(); err != nil {
 			Log().Errorf("unexcepted panic error: %s", err)
@@ -116,16 +116,16 @@ func (d *EventDirector) work(header EventHeader, packet []byte) error {
 	return nil
 }
 
-func (d *EventDirector) makeFilterChain(next EventFilterInvoker, filters []EventFilter) EventFilterInvoker {
+func (d *EventDirector) makeFilterChain(next EventFilterFunc, filters []EventFilter) EventFilterFunc {
 	for i := len(filters) - 1; i >= 0; i-- {
 		next = filters[i].DoFilter(next)
 	}
 	return next
 }
 
-// InjectFormatters Auto inject
-func (d *EventDirector) InjectFormatters(formatters []Transformer) {
-	Log().Infof("server set formatters: %d", len(formatters))
+// InjectTransformers Auto inject
+func (d *EventDirector) InjectTransformers(formatters []Transformer) {
+	Log().Infof("director set transformers: %d", len(formatters))
 	for _, f := range formatters {
 		d.transformers[f.ActiveON()] = f
 	}
@@ -133,10 +133,10 @@ func (d *EventDirector) InjectFormatters(formatters []Transformer) {
 
 // InjectGlobalFilters Auto inject
 func (d *EventDirector) InjectGlobalFilters(filters []EventFilter) {
-	Log().Infof("server add global filters: %d", len(filters))
+	Log().Infof("director add global filters: %d", len(filters))
 	for _, f := range filters {
-		// 忽略Effective TypedEventFilter
-		if _, is := f.(TypedEventFilter); is {
+		// 忽略Effective EffectEventFilter
+		if _, is := f.(EffectEventFilter); is {
 			continue
 		}
 		d.globalFilters = append(d.globalFilters, f)
@@ -144,20 +144,20 @@ func (d *EventDirector) InjectGlobalFilters(filters []EventFilter) {
 }
 
 // InjectEffectFilters Auto inject
-func (d *EventDirector) InjectEffectFilters(filters []TypedEventFilter) {
-	Log().Infof("server add effect filters: %d", len(filters))
+func (d *EventDirector) InjectEffectFilters(filters []EffectEventFilter) {
+	Log().Infof("director add effect filters: %d", len(filters))
 	for _, filter := range filters {
 		if list, ok := d.effectFilters[filter.EffectON()]; ok {
 			d.effectFilters[filter.EffectON()] = append(list, filter)
 		} else {
-			d.effectFilters[filter.EffectON()] = []TypedEventFilter{filter}
+			d.effectFilters[filter.EffectON()] = []EffectEventFilter{filter}
 		}
 	}
 }
 
 // InjectDispatchers Auto inject
 func (d *EventDirector) InjectDispatchers(items []Dispatcher) {
-	Log().Infof("server add dispatchers: %d", len(items))
+	Log().Infof("director add dispatchers: %d", len(items))
 	for _, a := range items {
 		d.dispatchers[a.DispatcherId()] = a
 	}
