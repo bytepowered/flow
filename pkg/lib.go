@@ -95,7 +95,7 @@ type Transformer interface {
 type Adapter interface {
 	// AdapterId 适配接口实现具体类型的ID
 	AdapterId() string
-	// SetEventHandler 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
+	// SetEventDeliverFunc 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
 	SetEventDeliverFunc(handler EventDeliverFunc)
 }
 
