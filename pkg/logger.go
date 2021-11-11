@@ -88,8 +88,7 @@ func InitLogger() error {
 }
 
 func shortCaller(caller string, line int) string {
-	// cmschina.com.cn/msd/pkg/impl/szfiu.(*WebsocketMarketAdapter).OnInit
-	// cmschina.com.cn/msd/pkg/impl/szfiu.(*WebsocketMarketAdapter).OnStart
+	// github.com/bytepowered/webtrigger/impl/coding.(*WebsocketMessageAdapter).OnInit
 	sbytes := []byte(caller)
 	idx := bytes.LastIndexByte(sbytes, '(')
 	if idx <= 0 {
