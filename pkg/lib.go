@@ -26,7 +26,7 @@ func (e EventType) String() string {
 	return EventTypeName(e)
 }
 
-// EventHeader 行情数据Header
+// EventHeader 事件Header
 type EventHeader struct {
 	RecvTime  int64     `json:"recvTime"`  // 接收数据的系统时间戳，精确到纳秒
 	Origin    Origin    `json:"origin"`    // 来源类型
@@ -97,6 +97,8 @@ type Adapter interface {
 	AdapterId() string
 	// SetEventDeliverFunc 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
 	SetEventDeliverFunc(handler EventDeliverFunc)
+	// Deliver 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
+	Deliver(ctx EventContext, header EventHeader, packet []byte)
 }
 
 // Dispatcher Event派发处理接口

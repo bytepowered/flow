@@ -10,7 +10,7 @@ import (
 var (
 	_ EventDeliverFunc = new(EventDirector)
 	_ runv.Initable    = new(EventDirector)
-	_ runv.Component   = new(EventDirector)
+	_ runv.Shutdown    = new(EventDirector)
 )
 
 type DirectorOption func(director *EventDirector)
@@ -44,7 +44,9 @@ func NewEventDirector(opts ...DirectorOption) *EventDirector {
 }
 
 func (d *EventDirector) OnInit() error {
-	// bind binary handler
+	Assert(0 < len(d.transformers), "transformers is required")
+	Assert(0 < len(d.adapters), "adapters is required")
+	Assert(0 < len(d.dispatchers), "dispatchers is required")
 	for _, adapter := range d.adapters {
 		adapter.SetEventDeliverFunc(d)
 	}
@@ -88,17 +90,13 @@ func (d *EventDirector) Deliver(ctx EventContext, header EventHeader, packet []b
 	}, filters)(header)
 }
 
-func (d *EventDirector) Startup(ctx context.Context) error {
-	return nil
-}
-
 func (d *EventDirector) Shutdown(ctx context.Context) error {
 	d.workers.Close()
 	return nil
 }
 
 func (d *EventDirector) work(header EventHeader, packet []byte) error {
-	// format
+	// transform
 	transformer, ok := d.transformers[header.Vendor]
 	if !ok {
 		return fmt.Errorf("unsupported transformer, vendor: %s", VendorName(header.Vendor))
@@ -123,16 +121,14 @@ func (d *EventDirector) makeFilterChain(next EventFilterFunc, filters []EventFil
 	return next
 }
 
-// InjectTransformers Auto inject
-func (d *EventDirector) InjectTransformers(formatters []Transformer) {
+func (d *EventDirector) SetTransformers(formatters []Transformer) {
 	Log().Infof("director set transformers: %d", len(formatters))
 	for _, f := range formatters {
 		d.transformers[f.ActiveON()] = f
 	}
 }
 
-// InjectGlobalFilters Auto inject
-func (d *EventDirector) InjectGlobalFilters(filters []EventFilter) {
+func (d *EventDirector) SetGlobalFilters(filters []EventFilter) {
 	Log().Infof("director add global filters: %d", len(filters))
 	for _, f := range filters {
 		// 忽略Effective EffectEventFilter
@@ -143,8 +139,7 @@ func (d *EventDirector) InjectGlobalFilters(filters []EventFilter) {
 	}
 }
 
-// InjectEffectFilters Auto inject
-func (d *EventDirector) InjectEffectFilters(filters []EffectEventFilter) {
+func (d *EventDirector) SetEffectFilters(filters []EffectEventFilter) {
 	Log().Infof("director add effect filters: %d", len(filters))
 	for _, filter := range filters {
 		if list, ok := d.effectFilters[filter.EffectON()]; ok {
@@ -155,16 +150,14 @@ func (d *EventDirector) InjectEffectFilters(filters []EffectEventFilter) {
 	}
 }
 
-// InjectDispatchers Auto inject
-func (d *EventDirector) InjectDispatchers(items []Dispatcher) {
+func (d *EventDirector) SetDispatchers(items []Dispatcher) {
 	Log().Infof("director add dispatchers: %d", len(items))
 	for _, a := range items {
 		d.dispatchers[a.DispatcherId()] = a
 	}
 }
 
-// InjectAdapters Auto inject
-func (d *EventDirector) InjectAdapters(items []Adapter) {
+func (d *EventDirector) SetAdapters(items []Adapter) {
 	Log().Infof("director add adapters: %d", len(items))
 	for _, a := range items {
 		d.adapters[a.AdapterId()] = a

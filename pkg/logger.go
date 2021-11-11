@@ -95,5 +95,5 @@ func shortCaller(caller string, line int) string {
 	if idx <= 0 {
 		return caller
 	}
-	return string(sbytes[idx:]) + "[" + strconv.Itoa(line) + "]"
+	return string(sbytes[idx:]) + ":" + strconv.Itoa(line)
 }
