@@ -75,6 +75,10 @@ func (h *HttpServer) Server() *http.Server {
 	return h.server
 }
 
+func (h *HttpServer) ServerHandler() http.Handler {
+	return h.server.Handler
+}
+
 func (h *HttpServer) Startup(ctx context.Context) error {
 	return h.state.Startup(ctx)
 }
