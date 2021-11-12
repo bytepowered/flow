@@ -15,47 +15,49 @@ var (
 	_ runv.Initable = new(HttpServer)
 )
 
-type HttpServerOptions struct {
-	address string
-	tlscert string
-	tlskey  string
-}
+type HttpServerOption func(s *HttpServer)
 
 type HttpServer struct {
 	state   *flow.StateWorker
-	opts    HttpServerOptions
-	httpkey string
+	confkey string
 	server  *http.Server
-	Router  func() http.Handler
+	routerf func() http.Handler
 }
 
-func NewHttpServer() *HttpServer {
-	return &HttpServer{
-		Router: func() http.Handler {
+func NewHttpServer(opts ...HttpServerOption) *HttpServer {
+	hs := &HttpServer{
+		routerf: func() http.Handler {
 			return http.DefaultServeMux
 		},
+		confkey: "server",
 	}
+	for _, opt := range opts {
+		opt(hs)
+	}
+	return hs
 }
 
 func (h *HttpServer) OnInit() error {
 	mkey := func(k string) string {
-		return "http." + h.httpkey + "." + k
+		return "http." + h.confkey + "." + k
 	}
 	viper.SetDefault(mkey("address"), "0.0.0.0:8000")
-	h.opts = HttpServerOptions{
+	opts := httpopts{
 		address: viper.GetString(mkey("address")),
 		tlscert: viper.GetString(mkey("tlsCert")),
 		tlskey:  viper.GetString(mkey("tlsKey")),
 	}
 	h.server = &http.Server{
-		Addr:    h.opts.address,
-		Handler: h.Router(),
+		Addr:    opts.address,
+		Handler: h.routerf(),
 	}
 	h.state.AddWorkTask("http-server", func() error {
 		var err error
-		if h.opts.tlscert != "" && h.opts.tlskey != "" {
-			err = h.server.ListenAndServeTLS(h.opts.tlscert, h.opts.tlskey)
+		if opts.tlscert != "" && opts.tlskey != "" {
+			flow.Log().Infof("server listen serve[TLS]")
+			err = h.server.ListenAndServeTLS(opts.tlscert, opts.tlskey)
 		} else {
+			flow.Log().Infof("server listen serve")
 			err = h.server.ListenAndServe()
 		}
 		if err != nil {
@@ -82,4 +84,22 @@ func (h *HttpServer) Shutdown(ctx context.Context) error {
 		flow.Log().Errorf("http-server shutdown, error: %s", err)
 	}
 	return h.state.Shutdown(ctx)
+}
+
+func WithHttpServerRouterFunc(rf func() http.Handler) HttpServerOption {
+	return func(s *HttpServer) {
+		s.routerf = rf
+	}
+}
+
+func WithHttpServerConfigKey(key string) HttpServerOption {
+	return func(s *HttpServer) {
+		s.confkey = key
+	}
+}
+
+type httpopts struct {
+	address string
+	tlscert string
+	tlskey  string
 }
