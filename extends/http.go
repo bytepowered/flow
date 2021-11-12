@@ -6,6 +6,7 @@ import (
 	"fmt"
 	flow "github.com/bytepowered/flow/pkg"
 	"github.com/bytepowered/runv"
+	"github.com/spf13/viper"
 	"net/http"
 )
 
@@ -15,22 +16,49 @@ var (
 )
 
 type HttpServerOptions struct {
-	Address string `toml:"address"`
+	address string
+	tlscert string
+	tlskey  string
 }
 
 type HttpServer struct {
-	*flow.StateWorker
+	state   *flow.StateWorker
 	opts    HttpServerOptions
 	httpkey string
 	server  *http.Server
+	Router  func() http.Handler
+}
+
+func NewHttpServer() *HttpServer {
+	return &HttpServer{
+		Router: func() http.Handler {
+			return http.DefaultServeMux
+		},
+	}
 }
 
 func (h *HttpServer) OnInit() error {
-	h.server = &http.Server{
-		Addr: h.opts.Address,
+	mkey := func(k string) string {
+		return "http." + h.httpkey + "." + k
 	}
-	h.AddWorkTask("http-server", func() error {
-		if err := h.server.ListenAndServe(); err != nil {
+	viper.SetDefault(mkey("address"), "0.0.0.0:8000")
+	h.opts = HttpServerOptions{
+		address: viper.GetString(mkey("address")),
+		tlscert: viper.GetString(mkey("tlsCert")),
+		tlskey:  viper.GetString(mkey("tlsKey")),
+	}
+	h.server = &http.Server{
+		Addr:    h.opts.address,
+		Handler: h.Router(),
+	}
+	h.state.AddWorkTask("http-server", func() error {
+		var err error
+		if h.opts.tlscert != "" && h.opts.tlskey != "" {
+			err = h.server.ListenAndServeTLS(h.opts.tlscert, h.opts.tlskey)
+		} else {
+			err = h.server.ListenAndServe()
+		}
+		if err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
 				return nil
 			}
@@ -46,12 +74,12 @@ func (h *HttpServer) Server() *http.Server {
 }
 
 func (h *HttpServer) Startup(ctx context.Context) error {
-	return h.StateWorker.Startup(ctx)
+	return h.state.Startup(ctx)
 }
 
 func (h *HttpServer) Shutdown(ctx context.Context) error {
 	if err := h.server.Shutdown(ctx); err != nil {
 		flow.Log().Errorf("http-server shutdown, error: %s", err)
 	}
-	return h.StateWorker.Shutdown(ctx)
+	return h.state.Shutdown(ctx)
 }
