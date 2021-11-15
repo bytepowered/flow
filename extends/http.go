@@ -7,6 +7,7 @@ import (
 	flow "github.com/bytepowered/flow/pkg"
 	"github.com/bytepowered/runv"
 	"github.com/spf13/viper"
+	"net"
 	"net/http"
 )
 
@@ -51,7 +52,10 @@ func (h *HttpServer) OnInit() error {
 		Addr:    opts.address,
 		Handler: h.routerf(),
 	}
-	h.state.AddWorkTask("http-server", func() error {
+	h.state.AddStateTask("http-server", func(ctx context.Context) error {
+		h.server.BaseContext = func(l net.Listener) context.Context {
+			return context.WithValue(ctx, "conn.address", opts.address)
+		}
 		var err error
 		if opts.tlscert != "" && opts.tlskey != "" {
 			flow.Log().Infof("server listen serve[TLS]")

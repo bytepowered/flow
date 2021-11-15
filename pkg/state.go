@@ -10,20 +10,20 @@ var (
 	_ runv.Liveness = new(StateWorker)
 )
 
-type workTask struct {
-	Id   string
-	Work func() error
+type stepTask struct {
+	Id         string
+	OnStepWork func() error
 }
 
 type stateTask struct {
-	Id   string
-	Work func(ctx context.Context) error
+	Id          string
+	OnStateWork func(ctx context.Context) error
 }
 
 type StateWorker struct {
 	statectx   context.Context
 	statefun   context.CancelFunc
-	workTasks  []workTask
+	stepTasks  []stepTask
 	stateTasks []stateTask
 	workwg     sync.WaitGroup
 }
@@ -32,24 +32,24 @@ func NewStateWorker(ctx context.Context) *StateWorker {
 	sc, sf := context.WithCancel(ctx)
 	return &StateWorker{
 		statectx: sc, statefun: sf,
-		workTasks:  make([]workTask, 0, 2),
+		stepTasks:  make([]stepTask, 0, 2),
 		stateTasks: make([]stateTask, 0, 2),
 	}
 }
 
-func (s *StateWorker) AddWorkTask(id string, task func() error) *StateWorker {
-	s.workTasks = append(s.workTasks, workTask{Id: id, Work: task})
+func (s *StateWorker) AddStepTask(id string, task func() error) *StateWorker {
+	s.stepTasks = append(s.stepTasks, stepTask{Id: id, OnStepWork: task})
 	return s
 }
 
 func (s *StateWorker) AddStateTask(id string, task func(ctx context.Context) error) *StateWorker {
-	s.stateTasks = append(s.stateTasks, stateTask{Id: id, Work: task})
+	s.stateTasks = append(s.stateTasks, stateTask{Id: id, OnStateWork: task})
 	return s
 }
 
 func (s *StateWorker) Startup(ctx context.Context) error {
-	for _, t := range s.workTasks {
-		go s.doWorkTask(t)
+	for _, t := range s.stepTasks {
+		go s.doStepTask(t)
 	}
 	for _, t := range s.stateTasks {
 		go s.doStateTask(t)
@@ -60,7 +60,7 @@ func (s *StateWorker) Startup(ctx context.Context) error {
 func (s *StateWorker) Shutdown(ctx context.Context) error {
 	s.statefun()
 	s.workwg.Wait()
-	size := len(s.workTasks)
+	size := len(s.stepTasks)
 	if size > 0 {
 		Log().Infof("tasks(%d): shutdown", size)
 	}
@@ -71,28 +71,28 @@ func (s *StateWorker) StateContext() context.Context {
 	return s.statectx
 }
 
-func (s *StateWorker) doStateTask(task stateTask) {
-	defer Log().Infof("state-task(%s): terminaled", task.Id)
-	Log().Infof("state-task(%s): startup", task.Id)
-	if err := task.Work(s.statectx); err != nil {
-		Log().Errorf("work-task(%s): stop by error: %s", task.Id, err)
+func (s *StateWorker) doStateTask(state stateTask) {
+	defer Log().Infof("state-task(%s): terminaled", state.Id)
+	Log().Infof("state-task(%s): startup", state.Id)
+	if err := state.OnStateWork(s.statectx); err != nil {
+		Log().Errorf("state-task(%s): stop by error: %s", state.Id, err)
 	}
 }
 
-func (s *StateWorker) doWorkTask(task workTask) {
+func (s *StateWorker) doStepTask(step stepTask) {
 	defer s.workwg.Done()
 	s.workwg.Add(1)
-	defer Log().Infof("work-task(%s): terminaled", task.Id)
-	Log().Infof("work-task(%s): startup", task.Id)
+	defer Log().Infof("step-task(%s): terminaled", step.Id)
+	Log().Infof("step-task(%s): startup", step.Id)
 	for {
 		select {
 		case <-s.statectx.Done():
-			Log().Infof("work-task(%s): stop by signal", task.Id)
+			Log().Infof("step-task(%s): stop by signal", step.Id)
 			return
 
 		default:
-			if err := task.Work(); err != nil {
-				Log().Errorf("work-task(%s): stop by error: %s", task.Id, err)
+			if err := step.OnStepWork(); err != nil {
+				Log().Errorf("step-task(%s): stop by error: %s", step.Id, err)
 				return
 			}
 		}
