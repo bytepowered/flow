@@ -2,9 +2,7 @@ package flow
 
 import "context"
 
-var (
-	_ EventContext = new(econtext)
-)
+var _ EventContext = new(econtext)
 
 type econtext struct {
 	ctx   context.Context

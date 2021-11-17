@@ -44,9 +44,9 @@ func NewEventDirector(opts ...DirectorOption) *EventDirector {
 }
 
 func (d *EventDirector) OnInit() error {
-	Assert(0 < len(d.transformers), "transformers is required")
-	Assert(0 < len(d.adapters), "adapters is required")
-	Assert(0 < len(d.dispatchers), "dispatchers is required")
+	runv.Assert(0 < len(d.transformers), "transformers is required")
+	runv.Assert(0 < len(d.adapters), "adapters is required")
+	runv.Assert(0 < len(d.dispatchers), "dispatchers is required")
 	for _, adapter := range d.adapters {
 		adapter.SetEventDeliverFunc(d)
 	}

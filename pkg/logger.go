@@ -1,26 +1,25 @@
 package flow
 
 import (
-	"bytes"
 	"fmt"
+	"github.com/bytepowered/runv/ext"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"io"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 )
 
 var (
 	_Logger *logrus.Logger = &logrus.Logger{
 		Out: os.Stderr,
-		Formatter: &logrus.JSONFormatter{
+		Formatter: ext.NewUTC8Formatter(&logrus.JSONFormatter{
 			PrettyPrint: false,
 			CallerPrettyfier: func(frame *runtime.Frame) (function string, file string) {
-				return shortCaller(frame.Func.Name(), frame.Line), ""
+				return ext.LogShortCaller(frame.Func.Name(), frame.Line), ""
 			},
-		},
+		}),
 		Hooks:        make(logrus.LevelHooks),
 		Level:        logrus.DebugLevel,
 		ExitFunc:     os.Exit,
@@ -50,7 +49,7 @@ func InitLogger() error {
 			logrus.FieldKeyFunc:  "caller",
 		}
 		caller = func(frame *runtime.Frame) (function string, file string) {
-			return shortCaller(frame.Func.Name(), frame.Line), ""
+			return ext.LogShortCaller(frame.Func.Name(), frame.Line), ""
 		}
 	)
 	if strings.EqualFold("json", viper.GetString("app.log.format")) {
@@ -85,14 +84,4 @@ func InitLogger() error {
 		ReportCaller: viper.GetBool("app.log.caller"),
 	}
 	return nil
-}
-
-func shortCaller(caller string, line int) string {
-	// github.com/bytepowered/webtrigger/impl/coding.(*WebsocketMessageAdapter).OnInit
-	sbytes := []byte(caller)
-	idx := bytes.LastIndexByte(sbytes, '(')
-	if idx <= 0 {
-		return caller
-	}
-	return string(sbytes[idx:]) + ":" + strconv.Itoa(line)
 }
