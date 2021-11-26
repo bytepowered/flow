@@ -6,6 +6,7 @@ import (
 	"fmt"
 	flow "github.com/bytepowered/flow/pkg"
 	"github.com/bytepowered/runv"
+	"github.com/bytepowered/runv/ext"
 	"github.com/spf13/viper"
 	"net"
 	"net/http"
@@ -19,8 +20,8 @@ var (
 type HttpServerOption func(s *HttpServer)
 
 type HttpServer struct {
-	state   *flow.StateWorker
-	confkey string
+	state   *ext.StateWorker
+	conkey  string
 	server  *http.Server
 	routerf func() http.Handler
 }
@@ -30,7 +31,7 @@ func NewHttpServer(opts ...HttpServerOption) *HttpServer {
 		routerf: func() http.Handler {
 			return http.DefaultServeMux
 		},
-		confkey: "server",
+		conkey: "server",
 	}
 	for _, opt := range opts {
 		opt(hs)
@@ -40,7 +41,7 @@ func NewHttpServer(opts ...HttpServerOption) *HttpServer {
 
 func (h *HttpServer) OnInit() error {
 	mkey := func(k string) string {
-		return "http." + h.confkey + "." + k
+		return "http." + h.conkey + "." + k
 	}
 	viper.SetDefault(mkey("address"), "0.0.0.0:8000")
 	opts := httpopts{
@@ -94,15 +95,15 @@ func (h *HttpServer) Shutdown(ctx context.Context) error {
 	return h.state.Shutdown(ctx)
 }
 
-func WithHttpServerRouterFunc(rf func() http.Handler) HttpServerOption {
+func WithHttpRouterFactory(factory func() http.Handler) HttpServerOption {
 	return func(s *HttpServer) {
-		s.routerf = rf
+		s.routerf = factory
 	}
 }
 
 func WithHttpServerConfigKey(key string) HttpServerOption {
 	return func(s *HttpServer) {
-		s.confkey = key
+		s.conkey = key
 	}
 }
 
