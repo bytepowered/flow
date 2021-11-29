@@ -17,11 +17,11 @@ func NewSyncEventContext(ctx context.Context) EventContext {
 	return NewEventContext(ctx, false)
 }
 
-func (e *econtext) GetVar(key interface{}) interface{} {
+func (e *econtext) Var(key interface{}) interface{} {
 	return e.ctx.Value(key)
 }
 
-func (e *econtext) GetVarE(key interface{}) (interface{}, bool) {
+func (e *econtext) VarE(key interface{}) (interface{}, bool) {
 	v := e.ctx.Value(key)
 	return v, v != nil
 }

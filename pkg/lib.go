@@ -46,13 +46,13 @@ type EventContext interface {
 	// Context 返回Context
 	Context() context.Context
 
-	// GetVar 获取Context设定的变量；
+	// Var 获取Context设定的变量；
 	// 属于Context().Value()方法的快捷方式。
-	GetVar(key interface{}) interface{}
+	Var(key interface{}) interface{}
 
-	// GetVarE 获取Context设定的变量，返回变量是否存在。
+	// VarE 获取Context设定的变量，返回变量是否存在。
 	// 属于Context().Value()方法的快捷方式。
-	GetVarE(key interface{}) (interface{}, bool)
+	VarE(key interface{}) (interface{}, bool)
 
 	//Async 返回当前Event处理的调用过程是否为异步
 	Async() bool
