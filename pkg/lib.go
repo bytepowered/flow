@@ -2,43 +2,32 @@ package flow
 
 import (
 	"context"
-	"reflect"
 )
-
-// Origin 表示Event来源
-type Origin uint8
-
-func (o Origin) String() string {
-	return OriginName(o)
-}
-
-// Vendor 表示Event来源厂商
-type Vendor uint16
-
-func (v Vendor) String() string {
-	return VendorName(v)
-}
 
 // EventType 表示Event类型
 type EventType uint16
 
 func (e EventType) String() string {
-	return EventTypeName(e)
+	return EventTypeNameOf(e)
 }
 
 // EventHeader 事件Header
 type EventHeader struct {
-	RecvTime  int64     `json:"recvTime"`  // 接收数据的系统时间戳，精确到纳秒
-	Origin    Origin    `json:"origin"`    // 来源类型
-	Vendor    Vendor    `json:"vendor"`    // 所属厂商
-	EventType EventType `json:"eventType"` // Event类型
+	Time int64     `json:"etime"` // 用于标识发生事件的时间戳，精确到纳秒
+	Tag  string    `json:"etag"`  // 用于标识发生事件来源的标签，通常格式为: origin.vendor
+	Type EventType `json:"etype"` // 事件类型，由业务定义
 }
 
-// Event 具体Event消息接口
-type Event interface {
+// EventRecord 具体Event消息接口
+type EventRecord interface {
+	// Tag 返回事件标签
+	Tag() string
+	// Header 返回事件Header
 	Header() EventHeader
-	Object() interface{}
-	Type() reflect.Type
+	// Record 返回事件记录对象
+	Record() interface{}
+	// Frames 返回事件原始数据
+	Frames() []byte
 }
 
 // EventContext 发生Event的上下文
@@ -58,53 +47,50 @@ type EventContext interface {
 	Async() bool
 }
 
-// EventDeliverFunc Event处理接口
-type EventDeliverFunc interface {
-	// Deliver 当Adapter接收到Event数据时，调用此方法来投递事件。
-	//    ctx Event上下文
-	//    header EventHeader
-	//    packet Event负载部分的数据。应当不包含Header数据。
-	Deliver(ctx EventContext, header EventHeader, packet []byte)
+// EventEmitter Event投递接口。当 SourceAdapter 触发事件时，使用 EventEmitter 投递事件。
+type EventEmitter interface {
+	// Emit 当Adapter接收到Event数据时，调用此方法来投递事件。
+	Emit(EventContext, EventRecord)
+}
+
+// EventFormatter Event格式处理，用于将字节流转换为事件对象。
+type EventFormatter interface {
+	Format([]byte) (EventRecord, error)
+}
+
+type Component interface {
+	// Tag 返回标识实现对象的标签
+	Tag() string
+	// TypeId 返回实现类型的ID
+	TypeId() string
+}
+
+// SourceAdapter 数据源适配接口
+type SourceAdapter interface {
+	Component
+	// SetEmitter 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
+	SetEmitter(emitter EventEmitter)
+	// Emit 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
+	Emit(ctx EventContext, record EventRecord)
 }
 
 // EventFilterFunc 执行过滤原始Event的函数；
-type EventFilterFunc func(header EventHeader) error
+type EventFilterFunc func(ctx EventContext, record EventRecord) error
 
 // EventFilter 原始Event过滤接口
 type EventFilter interface {
-	DoFilter(next EventFilterFunc) EventFilterFunc
-}
-
-// EffectEventFilter 针对特定类型原始数据进行过滤接口
-type EffectEventFilter interface {
-	// EffectON 在特定Event类型下生效
-	EffectON() EventType
-	// DoFilter 执行Event过滤
+	Component
 	DoFilter(next EventFilterFunc) EventFilterFunc
 }
 
 // Transformer 处理Event格式转换
 type Transformer interface {
-	// ActiveON 在特定类型下生效
-	ActiveON() Vendor
-	// DoTransform 执行Event格式转换
-	DoTransform(header EventHeader, packet []byte) (Event, error)
-}
-
-// Adapter 数据源适配接口
-type Adapter interface {
-	// AdapterId 适配接口实现具体类型的ID
-	AdapterId() string
-	// SetEventDeliverFunc 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
-	SetEventDeliverFunc(handler EventDeliverFunc)
-	// Deliver 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
-	Deliver(ctx EventContext, header EventHeader, packet []byte)
+	Component
+	DoTransform(EventRecord) (EventRecord, error)
 }
 
 // Dispatcher Event派发处理接口
 type Dispatcher interface {
-	// DispatcherId 派发处理接口实现具体类型的ID
-	DispatcherId() string
-	// Dispatch 执行Event派发处理
-	Dispatch(event Event) error
+	Component
+	DoDelivery(EventRecord) error
 }
