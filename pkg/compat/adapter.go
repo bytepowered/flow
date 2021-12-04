@@ -1,6 +1,6 @@
 package compat
 
-import flow "github.com/bytepowered/flow/pkg"
+import flow "github.com/bytepowered/flow/v2/pkg"
 
 var _ flow.SourceAdapter = new(SourceAdapter)
 

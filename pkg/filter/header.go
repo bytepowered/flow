@@ -1,12 +1,19 @@
 package filter
 
 import (
-	flow "github.com/bytepowered/flow/pkg"
+	"fmt"
+	flow "github.com/bytepowered/flow/v2/pkg"
 	"github.com/bytepowered/runv"
 )
 
 var _ flow.EventFilter = new(HeaderFilter)
 var _ runv.Initable = new(HeaderFilter)
+var _ runv.Activable = new(HeaderFilter)
+
+type HeaderConfig struct {
+	flow.BasicConfig `toml:",squash"`
+	Options          HeaderOptions `toml:"configuration"`
+}
 
 type HeaderOptions struct {
 	Allowed  []int `toml:"allow-event-types"`
@@ -18,13 +25,6 @@ type HeaderFilter struct {
 	opts     HeaderOptions
 }
 
-func (h *HeaderFilter) Priority() int {
-	if h.priority == nil {
-		return -10099
-	}
-	return *h.priority
-}
-
 func (h *HeaderFilter) TypeId() string {
 	return "@skip.header"
 }
@@ -33,8 +33,17 @@ func (h *HeaderFilter) Tag() string {
 	return flow.TagGlobal
 }
 
+func (h *HeaderFilter) Active() bool {
+	return flow.ConfigurationsOf(flow.ConfigKeyFilter).ActiveOf(h.TypeId())
+}
+
 func (h *HeaderFilter) OnInit() error {
-	//
+	config := HeaderConfig{}
+	err := flow.ConfigurationsOf(flow.ConfigKeyFilter).MarshalLookup(h.TypeId(), &config)
+	if err != nil {
+		return fmt.Errorf("load config error, type: %s, error: %w", h.TypeId(), err)
+	}
+	h.opts = config.Options
 	return nil
 }
 

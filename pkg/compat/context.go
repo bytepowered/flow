@@ -2,7 +2,7 @@ package compat
 
 import (
 	"context"
-	"github.com/bytepowered/flow/pkg"
+	"github.com/bytepowered/flow/v2/pkg"
 )
 
 var _ flow.EventContext = new(EventContext)
