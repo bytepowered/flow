@@ -18,7 +18,6 @@ type EngineOption func(*EventEngine)
 
 type EventEngine struct {
 	coroutines    *tunny.Pool
-	sourcems      map[string]SourceAdapter
 	_sources      []SourceAdapter
 	_filters      []EventFilter
 	_transformers []Transformer
@@ -26,9 +25,7 @@ type EventEngine struct {
 }
 
 func NewEventEngine(opts ...EngineOption) *EventEngine {
-	fd := &EventEngine{
-		sourcems: make(map[string]SourceAdapter, 4),
-	}
+	fd := &EventEngine{}
 	fd.coroutines = tunny.NewFunc(10_000, func(i interface{}) interface{} {
 		args := i.([]interface{})
 		pipe, ctx, record := args[0].(*Pipeline), args[1].(EventContext), args[2].(EventRecord)
@@ -78,7 +75,15 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 }
 
 func (e *EventEngine) BindPipeline(sourceTag string, pipe *Pipeline) {
-	source, ok := e.sourcems[sourceTag]
+	// find source adapter
+	source, ok := func(tag string) (SourceAdapter, bool) {
+		for _, s := range e._sources {
+			if tag == s.Tag() {
+				return s, true
+			}
+		}
+		return nil, false
+	}(sourceTag)
 	runv.Assert(ok, "source-adapter must be found, tag: "+sourceTag)
 	// bind work func
 	if pipe.emitf == nil {
@@ -91,9 +96,6 @@ func (e *EventEngine) BindPipeline(sourceTag string, pipe *Pipeline) {
 
 func (e *EventEngine) SetSourceAdapters(v []SourceAdapter) {
 	e._sources = v
-	for _, s := range v {
-		e.sourcems[s.Tag()] = s
-	}
 }
 
 func (e *EventEngine) SetDispatchers(v []Dispatcher) {
@@ -109,7 +111,7 @@ func (e *EventEngine) SetTransformers(v []Transformer) {
 }
 
 func (e *EventEngine) flat(group GroupedPipelineW) []RoutedPipelineW {
-	routers := make([]RoutedPipelineW, 0, len(e.sourcems))
+	routers := make([]RoutedPipelineW, 0, len(e._sources))
 	TagMatcher(group.Sources).match(e._sources, func(v interface{}) {
 		routers = append(routers, RoutedPipelineW{
 			SourceTag:    v.(SourceAdapter).Tag(),
