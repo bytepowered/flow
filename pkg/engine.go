@@ -15,22 +15,19 @@ var (
 type EngineOption func(*EventEngine)
 
 type EventEngine struct {
-	workers       *tunny.Pool
-	sources       map[string]SourceAdapter
-	filters       []EventFilter
-	transformers  []Transformer
-	globalFilters []EventFilter
-	dispatchers   []Dispatcher
-	pipelines     []*Pipeline
+	coroutines    *tunny.Pool
+	sourcems      map[string]SourceAdapter
+	_sources      []SourceAdapter
+	_filters      []EventFilter
+	_transformers []Transformer
+	_dispatchers  []Dispatcher
 }
 
 func NewEventEngine(opts ...EngineOption) *EventEngine {
 	fd := &EventEngine{
-		sources:       make(map[string]SourceAdapter, 2),
-		dispatchers:   make([]Dispatcher, 2),
-		globalFilters: make([]EventFilter, 0, 4),
+		sourcems: make(map[string]SourceAdapter, 4),
 	}
-	fd.workers = tunny.NewFunc(10_000, func(i interface{}) interface{} {
+	fd.coroutines = tunny.NewFunc(10_000, func(i interface{}) interface{} {
 		args := i.([]interface{})
 		pipe, ctx, record := args[0].(*Pipeline), args[1].(EventContext), args[2].(EventRecord)
 		return fd.onPipelineWorkFunc(pipe, ctx, record)
@@ -43,48 +40,50 @@ func NewEventEngine(opts ...EngineOption) *EventEngine {
 
 func (e *EventEngine) OnInit() error {
 	e.xlog().Infof("init")
-	runv.Assert(0 < len(e.sources), "sources is required")
-	runv.Assert(0 < len(e.dispatchers), "dispatchers is required")
-	groups := make([]PipeGroupDefine, 0)
-	for _, grp := range groups {
-		for _, rule := range e.flat(grp) {
-			source, ok := e.sources[rule.SourceTag]
-			runv.Assert(ok, "source-adapter must be found, tag: "+rule.SourceTag)
-			pipe := NewPipeline(e.onPipelineEmitFunc)
-			for _, gf := range e.globalFilters {
-				pipe.AddEventFilter(gf)
-			}
-			e.compile(pipe, rule)
-			e.pipelines = append(e.pipelines, pipe)
-			source.SetEmitter(pipe)
-		}
-	}
-	runv.Assert(0 < len(e.pipelines), "pipelines is required")
+	runv.Assert(0 < len(e._sources), "sources is required")
+	runv.Assert(0 < len(e._dispatchers), "dispatchers is required")
+	//groups := make([]PipeGroup, 0)
+	// load pipeline defines
 	return nil
 }
 
-func (e *EventEngine) compile(pipe *Pipeline, rule PipeRuledDefine) *Pipeline {
+func (e *EventEngine) compile(groups []PipeGroup) {
+	for _, grp := range groups {
+		for _, router := range e.flat(grp) {
+			pipe := NewPipelineOf(e.doAsyncPipelineEmitFunc)
+			e.BindPipeline(router.SourceTag, e.lookup(pipe, router))
+		}
+	}
+}
+
+func (e *EventEngine) lookup(pipe *Pipeline, router PipeRouter) *Pipeline {
 	// filters
-	TagPatterns(rule.Filters).match(e.filters, func(v interface{}) {
+	TagMatcher(router.Filters).match(e._filters, func(v interface{}) {
 		pipe.AddEventFilter(v.(EventFilter))
 	})
 	// transformer
-	TagPatterns(rule.Transformers).match(e.transformers, func(v interface{}) {
+	TagMatcher(router.Transformers).match(e._transformers, func(v interface{}) {
 		pipe.AddTransformer(v.(Transformer))
 	})
 	// dispatcher
-	TagPatterns(rule.Dispatchers).match(e.dispatchers, func(v interface{}) {
+	TagMatcher(router.Dispatchers).match(e._dispatchers, func(v interface{}) {
 		pipe.AddDispatcher(v.(Dispatcher))
 	})
 	return pipe
 }
 
-func (e *EventEngine) flat(group PipeGroupDefine) []PipeRuledDefine {
-	// filters
-	//for tag, f := range e.globalFilters {
-	//	if match()
-	//}
-	return nil
+func (e *EventEngine) flat(group PipeGroup) []PipeRouter {
+	routers := make([]PipeRouter, 0, len(e.sourcems))
+	TagMatcher(group.Sources).match(e._sources, func(v interface{}) {
+		routers = append(routers, PipeRouter{
+			SourceTag:    v.(SourceAdapter).Tag(),
+			GroupId:      group.Id,
+			Filters:      group.Filters,
+			Transformers: group.Transformers,
+			Dispatchers:  group.Dispatchers,
+		})
+	})
+	return routers
 }
 
 func (e *EventEngine) onPipelineWorkFunc(pipe *Pipeline, ctx EventContext, record EventRecord) error {
@@ -97,38 +96,48 @@ func (e *EventEngine) onPipelineWorkFunc(pipe *Pipeline, ctx EventContext, recor
 	return nil
 }
 
-func (e *EventEngine) onPipelineEmitFunc(pipe *Pipeline, ctx EventContext, record EventRecord) {
-	if ctx.Async() {
+func (e *EventEngine) doAsyncPipelineEmitFunc(pipe *Pipeline, ctx EventContext, record EventRecord) {
+	if ctx.State().Is(EventStateAsync) {
 		_ = e.onPipelineWorkFunc(pipe, ctx, record)
 	} else {
-		e.workers.Process([]interface{}{pipe, ctx, record})
+		e.coroutines.Process([]interface{}{pipe, ctx, record})
 	}
 }
 
 func (e *EventEngine) Shutdown(ctx context.Context) error {
 	e.xlog().Infof("shutdown")
-	e.workers.Close()
+	e.coroutines.Close()
 	return nil
 }
 
-func (e *EventEngine) AddGlobalFilter(f EventFilter) {
-	e.xlog().Infof("add global filter, tag: %s", f.Tag())
-	e.globalFilters = append(e.globalFilters, f)
+func (e *EventEngine) BindPipeline(sourceTag string, pipe *Pipeline) {
+	source, ok := e.sourcems[sourceTag]
+	runv.Assert(ok, "source-adapter must be found, tag: "+sourceTag)
+	// bind work func
+	if pipe.workf == nil {
+		pipe.workf = e.doAsyncPipelineEmitFunc
+	}
+	// bind source adapter
+	source.SetEmitter(pipe)
 }
 
-func (e *EventEngine) AddFilter(f EventFilter) {
-	e.xlog().Infof("add filter, tag: %s", f.Tag())
-	e.filters = append(e.filters, f)
+func (e *EventEngine) SetSourceAdapters(v []SourceAdapter) {
+	e._sources = v
+	for _, s := range v {
+		e.sourcems[s.Tag()] = s
+	}
 }
 
-func (e *EventEngine) AddDispatcher(d Dispatcher) {
-	e.xlog().Infof("add dispatcher, tag: %s", d.Tag())
-	e.dispatchers = append(e.dispatchers, d)
+func (e *EventEngine) SetDispatchers(v []Dispatcher) {
+	e._dispatchers = v
 }
 
-func (e *EventEngine) AddSourceAdapter(sa SourceAdapter) {
-	e.xlog().Infof("add source-adapter, tag: %s", sa.Tag())
-	e.sources[sa.Tag()] = sa
+func (e *EventEngine) SetEventFilters(v []EventFilter) {
+	e._filters = v
+}
+
+func (e *EventEngine) SetTransformers(v []Transformer) {
+	e._transformers = v
 }
 
 func (e *EventEngine) xlog() *logrus.Logger {
@@ -137,6 +146,6 @@ func (e *EventEngine) xlog() *logrus.Logger {
 
 func WithEventEngineWorkerSize(size uint) EngineOption {
 	return func(d *EventEngine) {
-		d.workers.SetSize(int(size))
+		d.coroutines.SetSize(int(size))
 	}
 }

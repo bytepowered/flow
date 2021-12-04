@@ -13,7 +13,11 @@ type Pipeline struct {
 	dispatchers  []Dispatcher
 }
 
-func NewPipeline(workf PipelineEmitFunc) *Pipeline {
+func NewPipeline() *Pipeline {
+	return NewPipelineOf(nil)
+}
+
+func NewPipelineOf(workf PipelineEmitFunc) *Pipeline {
 	return &Pipeline{
 		workf:        workf,
 		filters:      make([]EventFilter, 0, 2),

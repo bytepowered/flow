@@ -6,25 +6,29 @@ import (
 	"strings"
 )
 
-type PipeGroupDefine struct {
+const (
+	TagGlobal = "@global"
+)
+
+type PipeGroup struct {
 	Id           string   `toml:"id"`
-	Sources      []string `toml:"sources"`
-	Filters      []string `toml:"filters"`
-	Transformers []string `toml:"transformers"`
-	Dispatchers  []string `toml:"dispatchers"`
+	Sources      []string `toml:"sources"`      // 匹配Source的Tag Pattern
+	Filters      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
+	Transformers []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
+	Dispatchers  []string `toml:"dispatchers"`  // 匹配Dispatcher的Tag Pattern
 }
 
-type PipeRuledDefine struct {
+type PipeRouter struct {
 	SourceTag    string
-	RuleId       string   `toml:"id"`
-	Filters      []string `toml:"filters"`
-	Transformers []string `toml:"transformers"`
-	Dispatchers  []string `toml:"dispatchers"`
+	GroupId      string
+	Filters      []string
+	Transformers []string
+	Dispatchers  []string
 }
 
-type TagPatterns []string
+type TagMatcher []string
 
-func (p TagPatterns) match(components interface{}, on func(interface{})) {
+func (p TagMatcher) match(components interface{}, on func(interface{})) {
 	vs := reflect.ValueOf(components)
 	runv.Assert(vs.Kind() == reflect.Slice, "'components' must be a slice")
 	for i := 0; i < vs.Len(); i++ {
@@ -32,17 +36,20 @@ func (p TagPatterns) match(components interface{}, on func(interface{})) {
 		comp, ok := elev.Interface().(Component)
 		runv.Assert(ok, "'components' item must be typeof 'Component'")
 		for _, pattern := range p {
-			if match(pattern, comp.Tag()) {
+			if match0(pattern, comp.Tag()) {
 				on(elev.Interface())
 			}
 		}
 	}
 }
 
-func match(pattern, tag string) bool {
+func match0(pattern, tag string) bool {
 	psize, tsize := len(pattern), len(tag)
 	if psize < 2 || tsize < 2 {
 		return false
+	}
+	if tag == TagGlobal {
+		return true
 	}
 	// pattern: java.**
 	// tag: java.logback

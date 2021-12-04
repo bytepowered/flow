@@ -5,12 +5,17 @@ import flow "github.com/bytepowered/flow/pkg"
 var _ flow.SourceAdapter = new(SourceAdapter)
 
 type SourceAdapter struct {
+	typeid  string
 	tag     string
 	emitter flow.EventEmitter
 }
 
-func NewSourceAdapter(tag string) *SourceAdapter {
-	return &SourceAdapter{tag: tag}
+func NewSourceAdapter(typeid, tag string) *SourceAdapter {
+	return &SourceAdapter{typeid: typeid, tag: tag}
+}
+
+func (a *SourceAdapter) TypeId() string {
+	return a.typeid
 }
 
 func (a *SourceAdapter) Tag() string {

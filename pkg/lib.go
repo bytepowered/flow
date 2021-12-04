@@ -2,6 +2,7 @@ package flow
 
 import (
 	"context"
+	"time"
 )
 
 // EventType 表示Event类型
@@ -11,17 +12,26 @@ func (e EventType) String() string {
 	return EventTypeNameOf(e)
 }
 
+// EventState 表示Event状态
+type EventState int
+
+func (s EventState) Is(state EventState) bool {
+	return int(s)&int(state) != 0
+}
+
 // EventHeader 事件Header
 type EventHeader struct {
-	Time int64     `json:"etime"` // 用于标识发生事件的时间戳，精确到纳秒
-	Tag  string    `json:"etag"`  // 用于标识发生事件来源的标签，通常格式为: origin.vendor
-	Type EventType `json:"etype"` // 事件类型，由业务定义
+	Time int64     `json:"etimestamp"` // 用于标识发生事件的时间戳，精确到纳秒
+	Tag  string    `json:"etag"`       // 用于标识发生事件来源的标签，通常格式为: origin.vendor
+	Type EventType `json:"etype"`      // 事件类型，由业务定义
 }
 
 // EventRecord 具体Event消息接口
 type EventRecord interface {
 	// Tag 返回事件标签
 	Tag() string
+	// Time 返回事件发生时间
+	Time() time.Time
 	// Header 返回事件Header
 	Header() EventHeader
 	// Record 返回事件记录对象
@@ -30,21 +40,26 @@ type EventRecord interface {
 	Frames() []byte
 }
 
+const (
+	EventStateNop   EventState = 0x00000000
+	EventStateAsync EventState = 0x00000001
+	EventStateSync  EventState = 0x00000002
+	//EventStateX     EventState = 0x00000004
+	//EventStateXX    EventState = 0x00000008
+)
+
 // EventContext 发生Event的上下文
 type EventContext interface {
 	// Context 返回Context
 	Context() context.Context
-
 	// Var 获取Context设定的变量；
 	// 属于Context().Value()方法的快捷方式。
 	Var(key interface{}) interface{}
-
 	// VarE 获取Context设定的变量，返回变量是否存在。
 	// 属于Context().Value()方法的快捷方式。
 	VarE(key interface{}) (interface{}, bool)
-
-	//Async 返回当前Event处理的调用过程是否为异步
-	Async() bool
+	//State 返回当前Event的状态
+	State() EventState
 }
 
 // EventEmitter Event投递接口。当 SourceAdapter 触发事件时，使用 EventEmitter 投递事件。

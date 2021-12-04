@@ -7,15 +7,17 @@ import (
 
 var _ flow.EventContext = new(EventContext)
 
+var statekey = struct {
+	v string
+}{"state.key"}
+
 type EventContext struct {
-	ctx   context.Context
-	async bool
+	ctx context.Context
 }
 
-func NewEventContext(ctx context.Context, async bool) flow.EventContext {
+func NewEventContext(ctx context.Context, state flow.EventState) flow.EventContext {
 	return &EventContext{
-		ctx:   ctx,
-		async: async,
+		ctx: context.WithValue(ctx, statekey, state),
 	}
 }
 
@@ -32,6 +34,6 @@ func (e *EventContext) Context() context.Context {
 	return e.ctx
 }
 
-func (e *EventContext) Async() bool {
-	return e.async
+func (e *EventContext) State() flow.EventState {
+	return e.Var(statekey).(flow.EventState)
 }

@@ -14,8 +14,15 @@ type HeaderOptions struct {
 }
 
 type HeaderFilter struct {
-	tag  string
-	opts HeaderOptions
+	priority *int
+	opts     HeaderOptions
+}
+
+func (h *HeaderFilter) Priority() int {
+	if h.priority == nil {
+		return -10099
+	}
+	return *h.priority
 }
 
 func (h *HeaderFilter) TypeId() string {
@@ -23,7 +30,7 @@ func (h *HeaderFilter) TypeId() string {
 }
 
 func (h *HeaderFilter) Tag() string {
-	return h.tag
+	return flow.TagGlobal
 }
 
 func (h *HeaderFilter) OnInit() error {
