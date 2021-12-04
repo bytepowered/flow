@@ -2,9 +2,11 @@ package flow
 
 import (
 	"context"
+	"fmt"
 	"github.com/Jeffail/tunny"
 	"github.com/bytepowered/runv"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -42,48 +44,13 @@ func (e *EventEngine) OnInit() error {
 	e.xlog().Infof("init")
 	runv.Assert(0 < len(e._sources), "sources is required")
 	runv.Assert(0 < len(e._dispatchers), "dispatchers is required")
-	//groups := make([]PipeGroup, 0)
-	// load pipeline defines
-	return nil
-}
-
-func (e *EventEngine) compile(groups []PipeGroup) {
-	for _, grp := range groups {
-		for _, router := range e.flat(grp) {
-			pipe := NewPipelineOf(e.doAsyncPipelineEmitFunc)
-			e.BindPipeline(router.SourceTag, e.lookup(pipe, router))
-		}
+	groups := make([]GroupedPipelineW, 0)
+	if err := viper.UnmarshalKey("pipeline", &groups); err != nil {
+		return fmt.Errorf("load 'pipeline' config error: %w", err)
 	}
-}
-
-func (e *EventEngine) lookup(pipe *Pipeline, router PipeRouter) *Pipeline {
-	// filters
-	TagMatcher(router.Filters).match(e._filters, func(v interface{}) {
-		pipe.AddEventFilter(v.(EventFilter))
-	})
-	// transformer
-	TagMatcher(router.Transformers).match(e._transformers, func(v interface{}) {
-		pipe.AddTransformer(v.(Transformer))
-	})
-	// dispatcher
-	TagMatcher(router.Dispatchers).match(e._dispatchers, func(v interface{}) {
-		pipe.AddDispatcher(v.(Dispatcher))
-	})
-	return pipe
-}
-
-func (e *EventEngine) flat(group PipeGroup) []PipeRouter {
-	routers := make([]PipeRouter, 0, len(e.sourcems))
-	TagMatcher(group.Sources).match(e._sources, func(v interface{}) {
-		routers = append(routers, PipeRouter{
-			SourceTag:    v.(SourceAdapter).Tag(),
-			GroupId:      group.Id,
-			Filters:      group.Filters,
-			Transformers: group.Transformers,
-			Dispatchers:  group.Dispatchers,
-		})
-	})
-	return routers
+	e.compile(groups)
+	e.xlog().Infof("init load pipeline groups: %d", len(groups))
+	return nil
 }
 
 func (e *EventEngine) onPipelineWorkFunc(pipe *Pipeline, ctx EventContext, record EventRecord) error {
@@ -114,11 +81,12 @@ func (e *EventEngine) BindPipeline(sourceTag string, pipe *Pipeline) {
 	source, ok := e.sourcems[sourceTag]
 	runv.Assert(ok, "source-adapter must be found, tag: "+sourceTag)
 	// bind work func
-	if pipe.workf == nil {
-		pipe.workf = e.doAsyncPipelineEmitFunc
+	if pipe.emitf == nil {
+		pipe.emitf = e.doAsyncPipelineEmitFunc
 	}
 	// bind source adapter
 	source.SetEmitter(pipe)
+	e.xlog().Infof("bind pipeline, source.tag: %s", sourceTag)
 }
 
 func (e *EventEngine) SetSourceAdapters(v []SourceAdapter) {
@@ -138,6 +106,45 @@ func (e *EventEngine) SetEventFilters(v []EventFilter) {
 
 func (e *EventEngine) SetTransformers(v []Transformer) {
 	e._transformers = v
+}
+
+func (e *EventEngine) flat(group GroupedPipelineW) []RoutedPipelineW {
+	routers := make([]RoutedPipelineW, 0, len(e.sourcems))
+	TagMatcher(group.Sources).match(e._sources, func(v interface{}) {
+		routers = append(routers, RoutedPipelineW{
+			SourceTag:    v.(SourceAdapter).Tag(),
+			GroupId:      group.GroupId,
+			Filters:      group.Filters,
+			Transformers: group.Transformers,
+			Dispatchers:  group.Dispatchers,
+		})
+	})
+	return routers
+}
+
+func (e *EventEngine) compile(groups []GroupedPipelineW) {
+	for _, grp := range groups {
+		for _, router := range e.flat(grp) {
+			pipe := NewPipelineOf(e.doAsyncPipelineEmitFunc)
+			e.BindPipeline(router.SourceTag, e.lookup(pipe, router))
+		}
+	}
+}
+
+func (e *EventEngine) lookup(pipe *Pipeline, router RoutedPipelineW) *Pipeline {
+	// filters
+	TagMatcher(router.Filters).match(e._filters, func(v interface{}) {
+		pipe.AddEventFilter(v.(EventFilter))
+	})
+	// transformer
+	TagMatcher(router.Transformers).match(e._transformers, func(v interface{}) {
+		pipe.AddTransformer(v.(Transformer))
+	})
+	// dispatcher
+	TagMatcher(router.Dispatchers).match(e._dispatchers, func(v interface{}) {
+		pipe.AddDispatcher(v.(Dispatcher))
+	})
+	return pipe
 }
 
 func (e *EventEngine) xlog() *logrus.Logger {

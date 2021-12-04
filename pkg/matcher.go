@@ -6,26 +6,6 @@ import (
 	"strings"
 )
 
-const (
-	TagGlobal = "@global"
-)
-
-type PipeGroup struct {
-	Id           string   `toml:"id"`
-	Sources      []string `toml:"sources"`      // 匹配Source的Tag Pattern
-	Filters      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
-	Transformers []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
-	Dispatchers  []string `toml:"dispatchers"`  // 匹配Dispatcher的Tag Pattern
-}
-
-type PipeRouter struct {
-	SourceTag    string
-	GroupId      string
-	Filters      []string
-	Transformers []string
-	Dispatchers  []string
-}
-
 type TagMatcher []string
 
 func (p TagMatcher) match(components interface{}, on func(interface{})) {

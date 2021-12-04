@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+const (
+	TagGlobal = "@global"
+)
+
 // EventType 表示Event类型
 type EventType uint16
 

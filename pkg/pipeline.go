@@ -4,10 +4,26 @@ import "fmt"
 
 var _ EventEmitter = new(Pipeline)
 
+type GroupedPipelineW struct {
+	GroupId      string   `toml:"group"`
+	Sources      []string `toml:"sources"`      // 匹配Source的Tag Pattern
+	Filters      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
+	Transformers []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
+	Dispatchers  []string `toml:"dispatchers"`  // 匹配Dispatcher的Tag Pattern
+}
+
+type RoutedPipelineW struct {
+	SourceTag    string
+	GroupId      string
+	Filters      []string
+	Transformers []string
+	Dispatchers  []string
+}
+
 type PipelineEmitFunc func(*Pipeline, EventContext, EventRecord)
 
 type Pipeline struct {
-	workf        PipelineEmitFunc
+	emitf        PipelineEmitFunc
 	filters      []EventFilter
 	transformers []Transformer
 	dispatchers  []Dispatcher
@@ -17,9 +33,9 @@ func NewPipeline() *Pipeline {
 	return NewPipelineOf(nil)
 }
 
-func NewPipelineOf(workf PipelineEmitFunc) *Pipeline {
+func NewPipelineOf(emitf PipelineEmitFunc) *Pipeline {
 	return &Pipeline{
-		workf:        workf,
+		emitf:        emitf,
 		filters:      make([]EventFilter, 0, 2),
 		transformers: make([]Transformer, 0, 2),
 		dispatchers:  make([]Dispatcher, 0, 2),
@@ -39,7 +55,7 @@ func (p *Pipeline) AddDispatcher(d Dispatcher) {
 }
 
 func (p *Pipeline) Emit(context EventContext, record EventRecord) {
-	p.workf(p, context, record)
+	p.emitf(p, context, record)
 }
 
 func (p *Pipeline) doEmit(context EventContext, record EventRecord) {
