@@ -1,6 +1,9 @@
 package flow
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 var _ EventEmitter = new(Pipeline)
 
@@ -60,6 +63,12 @@ func (p *Pipeline) Emit(context EventContext, record EventRecord) {
 
 func (p *Pipeline) doEmit(context EventContext, record EventRecord) {
 	// filter -> transformer -> dispatcher
+	metrics := Metrics()
+	tag := record.Tag()
+	defer func(t *prometheus.Timer) {
+		t.ObserveDuration()
+	}(metrics.NewTimer(tag, "emit"))
+	metrics.NewCounter(tag, "received").Inc()
 	next := EventFilterFunc(func(ctx EventContext, record EventRecord) (err error) {
 		for _, tf := range p.transformers {
 			record, err = tf.DoTransform(record)
@@ -75,6 +84,7 @@ func (p *Pipeline) doEmit(context EventContext, record EventRecord) {
 		return nil
 	})
 	if err := p.makeFilterChain(next, p.filters)(context, record); err != nil {
+		metrics.NewCounter(tag, "error").Inc()
 		Log().Errorf("pipeline handle event, error: %s", err)
 	}
 }

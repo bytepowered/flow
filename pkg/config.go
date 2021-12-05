@@ -17,9 +17,10 @@ type Configurations []map[interface{}]interface{}
 
 func (c Configurations) MarshalLookup(typeid string, outptr interface{}) error {
 	for _, m := range c {
-		if typeid == cast.ToString(m["typeid"]) {
+		if typeid == cast.ToString(m["type-id"]) {
 			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 				TagName:  "toml",
+				Squash:   true,
 				Metadata: nil,
 				Result:   outptr,
 			})
@@ -34,26 +35,26 @@ func (c Configurations) MarshalLookup(typeid string, outptr interface{}) error {
 
 func (c Configurations) ActiveOf(typeid string) bool {
 	for _, m := range c {
-		if typeid == cast.ToString(m["typeid"]) {
-			return !cast.ToBool(m["disabled"])
+		if typeid == cast.ToString(m["type-id"]) {
+			return !cast.ToBool(m["disabled"]) || !cast.ToBool(m["disable"])
 		}
 	}
 	return false
 }
 
-var configc = make(map[string][]map[interface{}]interface{}, 4)
+var confcached = make(map[string][]map[interface{}]interface{}, 4)
 
 type BasicConfig struct {
-	TypeId string `toml:"typeid"`
+	TypeId string `toml:"type-id"`
 	Tag    string `toml:"tag"`
 }
 
 func ConfigurationsOf(typkey string) Configurations {
-	cs, ok := configc[typkey]
+	cs, ok := confcached[typkey]
 	if !ok {
 		cs = make([]map[interface{}]interface{}, 0)
 		_ = viper.UnmarshalKey(typkey, &cs)
-		configc[typkey] = cs
+		confcached[typkey] = cs
 	}
 	return cs
 }

@@ -35,7 +35,7 @@ func newMetrics() *CoreMetrics {
 			Subsystem: "core",
 			Name:      "count",
 			Help:      "核心事件统计",
-		}, []string{"source", "eventType"}),
+		}, []string{"source", "action"}),
 		performance: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: ns,
 			Subsystem: "core",

@@ -39,8 +39,8 @@ func NewEventEngine(opts ...EngineOption) *EventEngine {
 
 func (e *EventEngine) OnInit() error {
 	e.xlog().Infof("init")
-	runv.Assert(0 < len(e._sources), "sources is required")
-	runv.Assert(0 < len(e._dispatchers), "dispatchers is required")
+	runv.Assert(0 < len(e._sources), "engine.sources is required")
+	runv.Assert(0 < len(e._dispatchers), "engine.dispatchers is required")
 	groups := make([]GroupedPipelineW, 0)
 	if err := viper.UnmarshalKey("pipeline", &groups); err != nil {
 		return fmt.Errorf("load 'pipeline' config error: %w", err)
@@ -84,7 +84,8 @@ func (e *EventEngine) BindPipeline(sourceTag string, pipe *Pipeline) {
 		}
 		return nil, false
 	}(sourceTag)
-	runv.Assert(ok, "source-adapter must be found, tag: "+sourceTag)
+	runv.Assert(ok, "pipe.source-adapter must be found, source.tag: "+sourceTag)
+	runv.Assert(len(pipe.dispatchers) > 0, "pipe.dispatcher is required, source.tag: "+sourceTag)
 	// bind work func
 	if pipe.emitf == nil {
 		pipe.emitf = e.doAsyncPipelineEmitFunc

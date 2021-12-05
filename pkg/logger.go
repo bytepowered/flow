@@ -76,7 +76,7 @@ func InitLogger() error {
 		return fmt.Errorf("fatal parse log file: %w", err)
 	}
 	_Logger = &logrus.Logger{
-		Out:          io.MultiWriter(os.Stdout, file),
+		Out:          io.MultiWriter(os.Stderr, file),
 		Formatter:    formatter,
 		Hooks:        make(logrus.LevelHooks),
 		Level:        level,
