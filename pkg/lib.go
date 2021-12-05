@@ -72,16 +72,17 @@ type EventEmitter interface {
 	Emit(EventContext, EventRecord)
 }
 
-// EventFormatter Event格式处理，用于将字节流转换为事件对象。
-type EventFormatter interface {
-	Format([]byte) (EventRecord, error)
-}
-
 type Component interface {
 	// Tag 返回标识实现对象的标签
 	Tag() string
 	// TypeId 返回实现类型的ID
 	TypeId() string
+}
+
+// EventFormatter Event格式处理，用于将字节流转换为事件对象。
+type EventFormatter interface {
+	OnInit(args interface{}) error
+	DoFormat(ctx context.Context, data []byte) (EventRecord, error)
 }
 
 // SourceAdapter 数据源适配接口
