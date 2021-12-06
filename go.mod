@@ -12,4 +12,4 @@ require (
 	github.com/spf13/viper v1.9.0
 )
 
-replace github.com/bytepowered/runv => gitee.com/bytepowered/runv v0.1.0
+replace github.com/bytepowered/runv => gitee.com/bytepowered/runv v0.1.1

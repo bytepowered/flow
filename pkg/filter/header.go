@@ -16,11 +16,11 @@ type HeaderOptions struct {
 
 type HeaderConfig struct {
 	flow.BasedConfiguration `toml:",squash"`
-	Options                 HeaderOptions `toml:"configuration"`
+	Opts                    HeaderOptions `toml:"configuration"`
 }
 
 type HeaderFilter struct {
-	opts HeaderOptions
+	config HeaderConfig
 }
 
 func (h *HeaderFilter) TypeId() string {
@@ -36,23 +36,26 @@ func (h *HeaderFilter) Disabled() (reason string, disable bool) {
 }
 
 func (h *HeaderFilter) OnInit() error {
-	_, _ = flow.RootConfigOf(flow.ConfigRootFilter).Lookup(h.TypeId(), &h.opts)
+	_, err := flow.RootConfigOf(flow.ConfigRootFilter).Lookup(h.TypeId(), &h.config)
+	if err != nil {
+		return err
+	}
+	runv.Assert(len(h.config.Opts.Allowed)+len(h.config.Opts.Rejected) > 0, "allows/rejects is required")
 	return nil
 }
 
 func (h *HeaderFilter) DoFilter(next flow.EventFilterFunc) flow.EventFilterFunc {
-	allowed := len(h.opts.Allowed) > 0
-	rejected := len(h.opts.Rejected) > 0
+	allowed := len(h.config.Opts.Allowed) > 0
+	rejected := len(h.config.Opts.Rejected) > 0
 	return func(ctx flow.EventContext, record flow.EventRecord) error {
 		etype := int(record.Header().Type)
-		switch {
-		case allowed && h.contains(h.opts.Allowed, etype):
-			return next(ctx, record)
-		case rejected && h.contains(h.opts.Rejected, etype):
-			return nil // discard
-		default:
+		if allowed && h.contains(h.config.Opts.Allowed, etype) {
 			return next(ctx, record)
 		}
+		if rejected && h.contains(h.config.Opts.Rejected, etype) {
+			return nil
+		}
+		return next(ctx, record)
 	}
 }
 
