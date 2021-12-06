@@ -11,3 +11,5 @@ require (
 	github.com/spf13/cast v1.4.1
 	github.com/spf13/viper v1.9.0
 )
+
+replace github.com/bytepowered/runv => gitee.com/bytepowered/runv v0.0.16
