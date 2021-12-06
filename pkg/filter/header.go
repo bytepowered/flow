@@ -1,28 +1,26 @@
 package filter
 
 import (
-	"fmt"
 	flow "github.com/bytepowered/flow/v2/pkg"
 	"github.com/bytepowered/runv"
 )
 
 var _ flow.EventFilter = new(HeaderFilter)
 var _ runv.Initable = new(HeaderFilter)
-var _ runv.Activable = new(HeaderFilter)
-
-type HeaderConfig struct {
-	flow.BasicConfig `toml:",squash"`
-	Options          HeaderOptions `toml:"configuration"`
-}
+var _ runv.Disabled = new(HeaderFilter)
 
 type HeaderOptions struct {
 	Allowed  []int `toml:"allow-event-types"`
 	Rejected []int `toml:"reject-event-types"`
 }
 
+type HeaderConfig struct {
+	flow.BasedConfiguration `toml:",squash"`
+	Options                 HeaderOptions `toml:"configuration"`
+}
+
 type HeaderFilter struct {
-	priority *int
-	opts     HeaderOptions
+	opts HeaderOptions
 }
 
 func (h *HeaderFilter) TypeId() string {
@@ -30,20 +28,15 @@ func (h *HeaderFilter) TypeId() string {
 }
 
 func (h *HeaderFilter) Tag() string {
-	return flow.TagGlobal
+	return flow.TagGlobal + ".filter"
 }
 
-func (h *HeaderFilter) Active() bool {
-	return flow.ConfigurationsOf(flow.ConfigKeyFilter).ActiveOf(h.TypeId())
+func (h *HeaderFilter) Disabled() (reason string, disable bool) {
+	return flow.LookupStateOf(flow.ConfigRootFilter, h.TypeId())
 }
 
 func (h *HeaderFilter) OnInit() error {
-	config := HeaderConfig{}
-	err := flow.ConfigurationsOf(flow.ConfigKeyFilter).MarshalLookup(h.TypeId(), &config)
-	if err != nil {
-		return fmt.Errorf("load config error, type: %s, error: %w", h.TypeId(), err)
-	}
-	h.opts = config.Options
+	_, _ = flow.RootConfigOf(flow.ConfigRootFilter).Lookup(h.TypeId(), &h.opts)
 	return nil
 }
 
@@ -70,4 +63,8 @@ func (h *HeaderFilter) contains(values []int, in int) bool {
 		}
 	}
 	return false
+}
+
+func NewHeaderFilter() *HeaderFilter {
+	return &HeaderFilter{}
 }
