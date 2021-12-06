@@ -28,7 +28,7 @@ func match0(pattern, tag string) bool {
 	if psize < 2 || tsize < 2 {
 		return false
 	}
-	if tag == TagGlobal {
+	if strings.HasPrefix(tag, TagGlobal) {
 		return true
 	}
 	// pattern: java.**
