@@ -18,8 +18,9 @@ const (
 
 // BasedConfiguration 基础配置必要的字段
 type BasedConfiguration struct {
-	TypeId string `toml:"type-id"`
-	Tag    string `toml:"tag"`
+	TypeId      string `toml:"type-id"`
+	Tag         string `toml:"tag"`
+	Description string `toml:"description"`
 }
 
 // Configuration 不定字段配置
