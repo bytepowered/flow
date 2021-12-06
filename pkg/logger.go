@@ -12,8 +12,8 @@ import (
 	"strings"
 )
 
-var (
-	_Logger *logrus.Logger = &logrus.Logger{
+func init() {
+	runv.SetLogger(&logrus.Logger{
 		Out: os.Stderr,
 		Formatter: &logrus.JSONFormatter{
 			PrettyPrint: false,
@@ -25,24 +25,26 @@ var (
 		Level:        logrus.DebugLevel,
 		ExitFunc:     os.Exit,
 		ReportCaller: true,
-	}
-)
+	})
+}
 
 func Log() *logrus.Logger {
-	return _Logger
+	return runv.Log()
 }
 
 func SetLogger(logger *logrus.Logger) {
-	_Logger = logger
+	runv.SetLogger(logger)
 }
 
-func InitLogger() *logrus.Logger {
-	v, err := InitLoggerE()
-	runv.AssertNil(err, "init logger error")
-	return v
+func InitLogger() error {
+	v, err := NewLogger()
+	if err != nil {
+		SetLogger(v)
+	}
+	return err
 }
 
-func InitLoggerE() (*logrus.Logger, error) {
+func NewLogger() (*logrus.Logger, error) {
 	viper.SetDefault("app.log.path", "logs")
 	viper.SetDefault("app.log.level", "debug")
 	viper.SetDefault("app.log.format", "json")
@@ -82,7 +84,7 @@ func InitLoggerE() (*logrus.Logger, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fatal parse log file: %w", err)
 	}
-	_Logger = &logrus.Logger{
+	newLogger := &logrus.Logger{
 		Out:          io.MultiWriter(os.Stderr, file),
 		Formatter:    formatter,
 		Hooks:        make(logrus.LevelHooks),
@@ -90,6 +92,5 @@ func InitLoggerE() (*logrus.Logger, error) {
 		ExitFunc:     os.Exit,
 		ReportCaller: viper.GetBool("app.log.caller"),
 	}
-	runv.SetLogger(_Logger)
-	return _Logger, nil
+	return newLogger, nil
 }
