@@ -2,6 +2,7 @@ package flow
 
 import (
 	"fmt"
+	"github.com/bytepowered/runv"
 	"github.com/bytepowered/runv/ext"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -35,7 +36,13 @@ func SetLogger(logger *logrus.Logger) {
 	_Logger = logger
 }
 
-func InitLogger() (*logrus.Logger, error) {
+func InitLogger() *logrus.Logger {
+	v, err := InitLoggerE()
+	runv.AssertNil(err, "init logger error")
+	return v
+}
+
+func InitLoggerE() (*logrus.Logger, error) {
 	viper.SetDefault("app.log.path", "logs")
 	viper.SetDefault("app.log.level", "debug")
 	viper.SetDefault("app.log.format", "json")
@@ -83,5 +90,6 @@ func InitLogger() (*logrus.Logger, error) {
 		ExitFunc:     os.Exit,
 		ReportCaller: viper.GetBool("app.log.caller"),
 	}
+	runv.SetLogger(_Logger)
 	return _Logger, nil
 }
