@@ -19,6 +19,12 @@ var (
 
 type HttpServerOption func(s *HttpServer)
 
+type HttpOptions struct {
+	address string
+	tlscert string
+	tlskey  string
+}
+
 type HttpServer struct {
 	state   *ext.StateWorker
 	conkey  string
@@ -44,7 +50,7 @@ func (h *HttpServer) OnInit() error {
 		return "http." + h.conkey + "." + k
 	}
 	viper.SetDefault(mkey("address"), "0.0.0.0:8000")
-	opts := httpopts{
+	opts := HttpOptions{
 		address: viper.GetString(mkey("address")),
 		tlscert: viper.GetString(mkey("tlsCert")),
 		tlskey:  viper.GetString(mkey("tlsKey")),
@@ -101,14 +107,8 @@ func WithHttpRouterFactory(factory func() http.Handler) HttpServerOption {
 	}
 }
 
-func WithHttpServerConfigKey(key string) HttpServerOption {
+func WithHttpConfigKey(key string) HttpServerOption {
 	return func(s *HttpServer) {
 		s.conkey = key
 	}
-}
-
-type httpopts struct {
-	address string
-	tlscert string
-	tlskey  string
 }
