@@ -38,7 +38,7 @@ func SetLogger(logger *logrus.Logger) {
 
 func InitLogger() error {
 	v, err := NewLogger()
-	if err != nil {
+	if err == nil {
 		SetLogger(v)
 	}
 	return err
