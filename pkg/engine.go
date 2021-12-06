@@ -26,7 +26,7 @@ type EventEngine struct {
 
 func NewEventEngine(opts ...EngineOption) *EventEngine {
 	fd := &EventEngine{}
-	fd.coroutines = tunny.NewFunc(10_000, func(i interface{}) interface{} {
+	fd.coroutines = tunny.NewFunc(1000, func(i interface{}) interface{} {
 		args := i.([]interface{})
 		pipe, ctx, record := args[0].(*Pipeline), args[1].(EventContext), args[2].(EventRecord)
 		return fd.onPipelineWorkFunc(pipe, ctx, record)
