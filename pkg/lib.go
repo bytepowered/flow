@@ -82,7 +82,7 @@ type Component interface {
 // EventFormatter Event格式处理，用于将字节流转换为事件对象。
 type EventFormatter interface {
 	OnInit(args interface{}) error
-	DoFormat(ctx context.Context, data []byte) (EventRecord, error)
+	DoFormat(ctx context.Context, srctag string, data []byte) (EventRecord, error)
 }
 
 // SourceAdapter 数据源适配接口
