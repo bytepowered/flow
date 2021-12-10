@@ -11,7 +11,7 @@ type TagMatcher []string
 func (tm TagMatcher) match(components interface{}, on func(interface{})) {
 	vs := reflect.ValueOf(components)
 	runv.Assert(vs.Kind() == reflect.Slice, "'components' must be a slice")
-	// 注意：基于Components来迭代，匹配声明为Global的组件；
+	// 注意：基于Components来遍历，优先检查匹配声明为Global的组件；
 	for i := 0; i < vs.Len(); i++ {
 		elev := vs.Index(i)
 		objv := elev.Interface()
@@ -19,7 +19,7 @@ func (tm TagMatcher) match(components interface{}, on func(interface{})) {
 		runv.Assert(ok, "'components' item must be typeof 'Component'")
 		tag := comp.Tag()
 		// globals
-		if global0(tag) {
+		if globals(tag) {
 			on(objv)
 			continue
 		}
@@ -45,6 +45,6 @@ func match0(pattern, tag string) bool {
 	return pattern == tag
 }
 
-func global0(tag string) bool {
+func globals(tag string) bool {
 	return strings.HasPrefix(tag, TagGLOBAL)
 }

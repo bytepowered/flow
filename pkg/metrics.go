@@ -2,40 +2,38 @@ package flow
 
 import "github.com/prometheus/client_golang/prometheus"
 
-var (
-	_metric = newMetrics()
-)
+var _metric = newMetrics()
 
-type CoreMetrics struct {
+type coremetrics struct {
 	counter     *prometheus.CounterVec
 	performance *prometheus.HistogramVec
 }
 
-func Metrics() *CoreMetrics {
+func metrics() *coremetrics {
 	return _metric
 }
 
-func (m *CoreMetrics) NewTimer(stage, action string) *prometheus.Timer {
+func (m *coremetrics) NewTimer(stage, action string) *prometheus.Timer {
 	return prometheus.NewTimer(m.NewObserver(stage, action))
 }
 
-func (m *CoreMetrics) NewObserver(stage, action string) prometheus.Observer {
+func (m *coremetrics) NewObserver(stage, action string) prometheus.Observer {
 	return m.performance.WithLabelValues(stage, action)
 }
 
-func (m *CoreMetrics) NewCounter(source, action string) prometheus.Counter {
-	return m.counter.WithLabelValues(source, action)
+func (m *coremetrics) NewCounter(tag, action string) prometheus.Counter {
+	return m.counter.WithLabelValues(tag, action)
 }
 
-func newMetrics() *CoreMetrics {
+func newMetrics() *coremetrics {
 	const ns = "flow"
-	return &CoreMetrics{
+	return &coremetrics{
 		counter: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: ns,
 			Subsystem: "core",
 			Name:      "count",
-			Help:      "核心事件统计",
-		}, []string{"source", "action"}),
+			Help:      "Source action with tag",
+		}, []string{"tag", "action"}),
 		performance: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: ns,
 			Subsystem: "core",

@@ -63,12 +63,12 @@ func (p *Router) Emit(context StateContext, record Event) {
 
 func (p *Router) doEmit(context StateContext, event Event) {
 	// filter -> transformer -> dispatcher
-	metrics := Metrics()
+	cm := metrics()
 	tag := event.Tag()
 	defer func(t *prometheus.Timer) {
 		t.ObserveDuration()
-	}(metrics.NewTimer(tag, "emit"))
-	metrics.NewCounter(tag, "received").Inc()
+	}(cm.NewTimer(tag, "emit"))
+	cm.NewCounter(tag, "received").Inc()
 	next := FilterFunc(func(ctx StateContext, event Event) (err error) {
 		for _, tf := range p.transformers {
 			event, err = tf.DoTransform(event)
@@ -84,7 +84,7 @@ func (p *Router) doEmit(context StateContext, event Event) {
 		return nil
 	})
 	if err := p.filterChainOf(next, p.filters)(context, event); err != nil {
-		metrics.NewCounter(tag, "error").Inc()
+		cm.NewCounter(tag, "error").Inc()
 		Log().Errorf("router handle event, error: %s", err)
 	}
 }
