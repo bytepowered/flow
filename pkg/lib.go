@@ -2,6 +2,7 @@ package flow
 
 import (
 	"context"
+	"github.com/bytepowered/runv"
 	"time"
 )
 
@@ -26,8 +27,8 @@ func (s State) Is(state State) bool {
 // Header 事件Header
 type Header struct {
 	Time int64  `json:"etimens"` // 用于标识发生事件的时间戳，精确到纳秒
-	Tag  string `json:"etag"`       // 用于标识发生事件来源的标签，通常格式为: origin.vendor
-	Kind Kind   `json:"ekind"`      // 事件类型，由业务定义
+	Tag  string `json:"etag"`    // 用于标识发生事件来源的标签，通常格式为: origin.vendor
+	Kind Kind   `json:"ekind"`   // 事件类型，由业务定义
 }
 
 // Event 具体Event消息接口
@@ -52,6 +53,13 @@ const (
 	//StateXX    State = 0x00000008
 )
 
+type Component interface {
+	// Tag 返回标识实现对象的标签
+	Tag() string
+	// TypeId 返回实现类型的ID
+	TypeId() string
+}
+
 // StateContext 发生Event的上下文
 type StateContext interface {
 	// Context 返回Context
@@ -66,17 +74,10 @@ type StateContext interface {
 	State() State
 }
 
-// Emitter Event投递接口。当 Source 触发事件时，使用 Emitter 投递事件。
+// Emitter Event发送接口，用于Source在外部实现消息投递逻辑。
+// 当 Source 触发事件时，使用 Emitter 发送事件。
 type Emitter interface {
-	// Emit 当Adapter接收到Event数据时，调用此方法来投递事件。
 	Emit(StateContext, Event)
-}
-
-type Component interface {
-	// Tag 返回标识实现对象的标签
-	Tag() string
-	// TypeId 返回实现类型的ID
-	TypeId() string
 }
 
 // Formatter Event格式处理，用于将字节流转换为事件对象。
@@ -85,12 +86,11 @@ type Formatter interface {
 	DoFormat(ctx context.Context, srctag string, data []byte) (Event, error)
 }
 
-// Source 数据源适配接口
+// Source 数据源适配接口。
 type Source interface {
 	Component
-	// SetEmitter 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
+	runv.Liveness
 	SetEmitter(emitter Emitter)
-	// Emit 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
 	Emit(ctx StateContext, event Event)
 }
 
@@ -109,7 +109,7 @@ type Transformer interface {
 	DoTransform(Event) (Event, error)
 }
 
-// Output Event派发处理接口
+// Output Event输出接口
 type Output interface {
 	Component
 	Send(Event) error

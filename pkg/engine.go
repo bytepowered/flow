@@ -11,10 +11,10 @@ import (
 
 var (
 	_ runv.Initable = new(EventEngine)
-	_ runv.Shutdown = new(EventEngine)
+	_ runv.Liveness = new(EventEngine)
 )
 
-type EngineOption func(*EventEngine)
+type EventEngineOption func(*EventEngine)
 
 type EventEngine struct {
 	coroutines    *tunny.Pool
@@ -24,7 +24,7 @@ type EventEngine struct {
 	_outputs      []Output
 }
 
-func NewEventEngine(opts ...EngineOption) *EventEngine {
+func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 	fd := &EventEngine{}
 	fd.coroutines = tunny.NewFunc(1000, func(i interface{}) interface{} {
 		args := i.([]interface{})
@@ -50,22 +50,9 @@ func (e *EventEngine) OnInit() error {
 	return nil
 }
 
-func (e *EventEngine) onRouterWorkFunc(pipe *Router, ctx StateContext, record Event) error {
-	defer func() {
-		if err := recover(); err != nil {
-			e.xlog().Errorf("match routers work, unexcepted panic error: %s, event.tag: %s, event.type: %s", err, record.Tag(), record.Header().Kind.String())
-		}
-	}()
-	pipe.doEmit(ctx, record)
+func (e *EventEngine) Startup(ctx context.Context) error {
+	e.xlog().Infof("startup")
 	return nil
-}
-
-func (e *EventEngine) doAsyncEmitFunc(router *Router, ctx StateContext, record Event) {
-	if ctx.State().Is(StateAsync) {
-		_ = e.onRouterWorkFunc(router, ctx, record)
-	} else {
-		e.coroutines.Process([]interface{}{router, ctx, record})
-	}
 }
 
 func (e *EventEngine) Shutdown(ctx context.Context) error {
@@ -93,6 +80,24 @@ func (e *EventEngine) Bind(sourceTag string, router *Router) {
 	// bind source adapter
 	source.SetEmitter(router)
 	e.xlog().Infof("bind router, source.tag: %s", sourceTag)
+}
+
+func (e *EventEngine) onRouterWorkFunc(pipe *Router, ctx StateContext, record Event) error {
+	defer func() {
+		if err := recover(); err != nil {
+			e.xlog().Errorf("match routers work, unexcepted panic error: %s, event.tag: %s, event.type: %s", err, record.Tag(), record.Header().Kind.String())
+		}
+	}()
+	pipe.doEmit(ctx, record)
+	return nil
+}
+
+func (e *EventEngine) doAsyncEmitFunc(router *Router, ctx StateContext, record Event) {
+	if ctx.State().Is(StateAsync) {
+		_ = e.onRouterWorkFunc(router, ctx, record)
+	} else {
+		e.coroutines.Process([]interface{}{router, ctx, record})
+	}
 }
 
 func (e *EventEngine) SetSources(v []Source) {
@@ -154,7 +159,7 @@ func (e *EventEngine) xlog() *logrus.Logger {
 	return Log().WithField("app", "engine").Logger
 }
 
-func WithEventEngineWorkerSize(size uint) EngineOption {
+func WithEventEngineWorkerSize(size uint) EventEngineOption {
 	return func(d *EventEngine) {
 		d.coroutines.SetSize(int(size))
 	}
