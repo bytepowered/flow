@@ -2,38 +2,40 @@ package compat
 
 import (
 	"context"
+	"fmt"
 	"github.com/bytepowered/flow/v2/pkg"
+	"time"
 )
 
-var _ flow.EventContext = new(EventContext)
+var _ flow.StateContext = new(StatedContext)
 
 var statekey = struct {
 	v string
-}{"state.key"}
+}{v: fmt.Sprintf("@hide.state.key:%d", time.Now().Nanosecond())}
 
-type EventContext struct {
+type StatedContext struct {
 	ctx context.Context
 }
 
-func NewEventContext(ctx context.Context, state flow.EventState) flow.EventContext {
-	return &EventContext{
+func NewStatedContext(ctx context.Context, state flow.State) flow.StateContext {
+	return &StatedContext{
 		ctx: context.WithValue(ctx, statekey, state),
 	}
 }
 
-func (e *EventContext) Var(key interface{}) interface{} {
+func (e *StatedContext) Var(key interface{}) interface{} {
 	return e.ctx.Value(key)
 }
 
-func (e *EventContext) VarE(key interface{}) (interface{}, bool) {
+func (e *StatedContext) VarE(key interface{}) (interface{}, bool) {
 	v := e.ctx.Value(key)
 	return v, v != nil
 }
 
-func (e *EventContext) Context() context.Context {
+func (e *StatedContext) Context() context.Context {
 	return e.ctx
 }
 
-func (e *EventContext) State() flow.EventState {
-	return e.Var(statekey).(flow.EventState)
+func (e *StatedContext) State() flow.State {
+	return e.Var(statekey).(flow.State)
 }

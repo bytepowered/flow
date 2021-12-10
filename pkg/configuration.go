@@ -10,7 +10,7 @@ const (
 	ConfigRootSource      = "source"
 	ConfigRootFilter      = "filter"
 	ConfigRootTransformer = "transformer"
-	ConfigRootDispatcher  = "dispatcher"
+	ConfigRootOutput      = "output"
 
 	ConfigKeyTypeId   = "type-id"
 	ConfigKeyDisabled = "disabled"

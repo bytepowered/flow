@@ -6,38 +6,38 @@ import (
 )
 
 const (
-	TagGlobal = "@global"
+	TagGLOBAL = "@globals."
 )
 
-// EventType 表示Event类型
-type EventType uint16
+// Kind 表示Event类型
+type Kind uint16
 
-func (e EventType) String() string {
-	return EventTypeNameOf(e)
+func (e Kind) String() string {
+	return KindNameOf(e)
 }
 
-// EventState 表示Event状态
-type EventState int
+// State 表示Event状态
+type State int
 
-func (s EventState) Is(state EventState) bool {
+func (s State) Is(state State) bool {
 	return int(s)&int(state) != 0
 }
 
-// EventHeader 事件Header
-type EventHeader struct {
-	Time int64     `json:"etimestamp"` // 用于标识发生事件的时间戳，精确到纳秒
-	Tag  string    `json:"etag"`       // 用于标识发生事件来源的标签，通常格式为: origin.vendor
-	Type EventType `json:"etype"`      // 事件类型，由业务定义
+// Header 事件Header
+type Header struct {
+	Time int64  `json:"etimens"` // 用于标识发生事件的时间戳，精确到纳秒
+	Tag  string `json:"etag"`       // 用于标识发生事件来源的标签，通常格式为: origin.vendor
+	Kind Kind   `json:"ekind"`      // 事件类型，由业务定义
 }
 
-// EventRecord 具体Event消息接口
-type EventRecord interface {
+// Event 具体Event消息接口
+type Event interface {
 	// Tag 返回事件标签
 	Tag() string
 	// Time 返回事件发生时间
 	Time() time.Time
 	// Header 返回事件Header
-	Header() EventHeader
+	Header() Header
 	// Record 返回事件记录对象
 	Record() interface{}
 	// Frames 返回事件原始数据
@@ -45,15 +45,15 @@ type EventRecord interface {
 }
 
 const (
-	EventStateNop   EventState = 0x00000000
-	EventStateAsync EventState = 0x00000001
-	EventStateSync  EventState = 0x00000002
-	//EventStateX     EventState = 0x00000004
-	//EventStateXX    EventState = 0x00000008
+	StateNop   State = 0x00000000
+	StateAsync State = 0x00000001
+	StateSync  State = 0x00000002
+	//StateX     State = 0x00000004
+	//StateXX    State = 0x00000008
 )
 
-// EventContext 发生Event的上下文
-type EventContext interface {
+// StateContext 发生Event的上下文
+type StateContext interface {
 	// Context 返回Context
 	Context() context.Context
 	// Var 获取Context设定的变量；
@@ -63,13 +63,13 @@ type EventContext interface {
 	// 属于Context().Value()方法的快捷方式。
 	VarE(key interface{}) (interface{}, bool)
 	//State 返回当前Event的状态
-	State() EventState
+	State() State
 }
 
-// EventEmitter Event投递接口。当 SourceAdapter 触发事件时，使用 EventEmitter 投递事件。
-type EventEmitter interface {
+// Emitter Event投递接口。当 Source 触发事件时，使用 Emitter 投递事件。
+type Emitter interface {
 	// Emit 当Adapter接收到Event数据时，调用此方法来投递事件。
-	Emit(EventContext, EventRecord)
+	Emit(StateContext, Event)
 }
 
 type Component interface {
@@ -79,38 +79,38 @@ type Component interface {
 	TypeId() string
 }
 
-// EventFormatter Event格式处理，用于将字节流转换为事件对象。
-type EventFormatter interface {
+// Formatter Event格式处理，用于将字节流转换为事件对象。
+type Formatter interface {
 	OnInit(args interface{}) error
-	DoFormat(ctx context.Context, srctag string, data []byte) (EventRecord, error)
+	DoFormat(ctx context.Context, srctag string, data []byte) (Event, error)
 }
 
-// SourceAdapter 数据源适配接口
-type SourceAdapter interface {
+// Source 数据源适配接口
+type Source interface {
 	Component
 	// SetEmitter 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
-	SetEmitter(emitter EventEmitter)
+	SetEmitter(emitter Emitter)
 	// Emit 适配器触发事件时，调用通过此方法设定的Handler来通知处理事件
-	Emit(ctx EventContext, record EventRecord)
+	Emit(ctx StateContext, event Event)
 }
 
-// EventFilterFunc 执行过滤原始Event的函数；
-type EventFilterFunc func(ctx EventContext, record EventRecord) error
+// FilterFunc 执行过滤原始Event的函数；
+type FilterFunc func(ctx StateContext, event Event) error
 
-// EventFilter 原始Event过滤接口
-type EventFilter interface {
+// Filter 原始Event过滤接口
+type Filter interface {
 	Component
-	DoFilter(next EventFilterFunc) EventFilterFunc
+	DoFilter(next FilterFunc) FilterFunc
 }
 
 // Transformer 处理Event格式转换
 type Transformer interface {
 	Component
-	DoTransform(EventRecord) (EventRecord, error)
+	DoTransform(Event) (Event, error)
 }
 
-// Dispatcher Event派发处理接口
-type Dispatcher interface {
+// Output Event派发处理接口
+type Output interface {
 	Component
-	DoDelivery(EventRecord) error
+	Send(Event) error
 }

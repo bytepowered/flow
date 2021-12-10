@@ -5,7 +5,7 @@ import (
 	"github.com/bytepowered/runv"
 )
 
-var _ flow.EventFilter = new(HeaderFilter)
+var _ flow.Filter = new(HeaderFilter)
 var _ runv.Initable = new(HeaderFilter)
 var _ runv.Disabled = new(HeaderFilter)
 
@@ -28,7 +28,7 @@ func (h *HeaderFilter) TypeId() string {
 }
 
 func (h *HeaderFilter) Tag() string {
-	return flow.TagGlobal + ".filter"
+	return flow.TagGLOBAL + "filter"
 }
 
 func (h *HeaderFilter) Disabled() (reason string, disable bool) {
@@ -44,11 +44,11 @@ func (h *HeaderFilter) OnInit() error {
 	return nil
 }
 
-func (h *HeaderFilter) DoFilter(next flow.EventFilterFunc) flow.EventFilterFunc {
+func (h *HeaderFilter) DoFilter(next flow.FilterFunc) flow.FilterFunc {
 	allowed := len(h.config.Opts.Allowed) > 0
 	rejected := len(h.config.Opts.Rejected) > 0
-	return func(ctx flow.EventContext, record flow.EventRecord) error {
-		etype := int(record.Header().Type)
+	return func(ctx flow.StateContext, record flow.Event) error {
+		etype := int(record.Header().Kind)
 		if allowed && h.contains(h.config.Opts.Allowed, etype) {
 			return next(ctx, record)
 		}

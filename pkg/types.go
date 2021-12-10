@@ -1,19 +1,19 @@
 package flow
 
 var (
-	_EventTypeNames = make(map[EventType]string, 8)
+	_KindNames = make(map[Kind]string, 8)
 )
 
-func SetEventTypeNames(kv map[EventType]string) {
-	_EventTypeNames = kv
+func SetKindNames(kv map[Kind]string) {
+	_KindNames = kv
 }
 
-func SetEventTypeName(typ EventType, name string) {
-	_EventTypeNames[typ] = name
+func SetKindName(typ Kind, name string) {
+	_KindNames[typ] = name
 }
 
-func EventTypeNameOf(typ EventType) string {
-	if n, ok := _EventTypeNames[typ]; ok {
+func KindNameOf(typ Kind) string {
+	if n, ok := _KindNames[typ]; ok {
 		return n
 	}
 	return "undefined"
