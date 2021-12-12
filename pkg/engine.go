@@ -22,6 +22,7 @@ type EventEngine struct {
 	_filters      []Filter
 	_transformers []Transformer
 	_outputs      []Output
+	_routers      []*Router
 }
 
 func NewEventEngine(opts ...EventEngineOption) *EventEngine {
@@ -34,6 +35,7 @@ func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 	for _, opt := range opts {
 		opt(fd)
 	}
+	runv.AddPostHook(fd.statechk)
 	return fd
 }
 
@@ -42,7 +44,7 @@ func (e *EventEngine) OnInit() error {
 	runv.Assert(0 < len(e._sources), "engine.sources is required")
 	runv.Assert(0 < len(e._outputs), "engine.outputs is required")
 	groups := make([]GroupRouterW, 0)
-	if err := viper.UnmarshalKey("routers", &groups); err != nil {
+	if err := viper.UnmarshalKey("router", &groups); err != nil {
 		return fmt.Errorf("load 'routers' config error: %w", err)
 	}
 	e.compile(groups)
@@ -77,8 +79,9 @@ func (e *EventEngine) Bind(sourceTag string, router *Router) {
 	if router.emitter == nil {
 		router.emitter = e.doAsyncEmitFunc
 	}
-	// bind source adapter
+	// bind source
 	source.SetEmitter(router)
+	e._routers = append(e._routers, router)
 	e.xlog().Infof("bind router, source.tag: %s", sourceTag)
 }
 
@@ -98,6 +101,11 @@ func (e *EventEngine) doAsyncEmitFunc(router *Router, ctx StateContext, record E
 	} else {
 		e.coroutines.Process([]interface{}{router, ctx, record})
 	}
+}
+
+func (e *EventEngine) statechk() error {
+	runv.Assert(0 < len(e._routers), "engine routers is required")
+	return nil
 }
 
 func (e *EventEngine) SetSources(v []Source) {
