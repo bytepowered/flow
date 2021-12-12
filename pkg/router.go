@@ -61,31 +61,30 @@ func (p *Router) Emit(context StateContext, record Event) {
 	p.emitter(p, context, record)
 }
 
-func (p *Router) doEmit(context StateContext, event Event) {
+func (p *Router) route(context StateContext, inevt Event) {
 	// filter -> transformer -> dispatcher
 	cm := metrics()
-	tag := event.Tag()
 	defer func(t *prometheus.Timer) {
 		t.ObserveDuration()
-	}(cm.NewTimer(tag, "emit"))
-	cm.NewCounter(tag, "received").Inc()
+	}(cm.NewTimer(inevt.Tag(), "emit"))
+	cm.NewCounter(inevt.Tag(), "received").Inc()
 	next := FilterFunc(func(ctx StateContext, event Event) (err error) {
 		for _, tf := range p.transformers {
 			event, err = tf.DoTransform(event)
 			if err != nil {
-				return err
+				return fmt.Errorf("at transoform(:%s) error: %w", tf.Tag(), err)
 			}
 		}
-		for _, df := range p.outputs {
-			if err = df.Send(event); err != nil {
-				return fmt.Errorf("send output(%s) error: %w", df.Tag(), err)
+		for _, op := range p.outputs {
+			if err = op.Send(event); err != nil {
+				return fmt.Errorf("on output(%s) error: %w", op.Tag(), err)
 			}
 		}
 		return nil
 	})
-	if err := p.filterChainOf(next, p.filters)(context, event); err != nil {
-		cm.NewCounter(tag, "error").Inc()
-		Log().Errorf("router handle event, error: %s", err)
+	if err := p.filterChainOf(next, p.filters)(context, inevt); err != nil {
+		cm.NewCounter(inevt.Tag(), "error").Inc()
+		Log().Errorf("route(%s->) event, error: %s", inevt.Tag(), err)
 	}
 }
 

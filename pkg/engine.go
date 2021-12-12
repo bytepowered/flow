@@ -82,13 +82,13 @@ func (e *EventEngine) Bind(sourceTag string, router *Router) {
 	e.xlog().Infof("bind router, source.tag: %s", sourceTag)
 }
 
-func (e *EventEngine) onRouterWorkFunc(pipe *Router, ctx StateContext, record Event) error {
+func (e *EventEngine) onRouterWorkFunc(router *Router, ctx StateContext, record Event) error {
 	defer func() {
 		if err := recover(); err != nil {
-			e.xlog().Errorf("match routers work, unexcepted panic error: %s, event.tag: %s, event.type: %s", err, record.Tag(), record.Header().Kind.String())
+			e.xlog().Errorf("on route event, unexcepted panic: %s, event.tag: %s, event.type: %s", err, record.Tag(), record.Header().Kind.String())
 		}
 	}()
-	pipe.doEmit(ctx, record)
+	router.route(ctx, record)
 	return nil
 }
 
