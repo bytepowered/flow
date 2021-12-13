@@ -90,7 +90,7 @@ type Formatter interface {
 type Source interface {
 	Component
 	runv.Liveness
-	SetEmitter(emitter Emitter)
+	AddEmitter(emitter Emitter)
 	Emit(ctx StateContext, event Event)
 }
 

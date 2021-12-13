@@ -9,9 +9,9 @@ import (
 var _ runv.Liveness = new(SlimSource)
 
 type SlimSource struct {
-	emitter flow.Emitter
-	donefun context.CancelFunc
-	donectx context.Context
+	emitters []flow.Emitter
+	donefun  context.CancelFunc
+	donectx  context.Context
 }
 
 func NewSlimSource() *SlimSource {
@@ -22,7 +22,7 @@ func NewSlimSource() *SlimSource {
 }
 
 func (s *SlimSource) Startup(ctx context.Context) error {
-	runv.Assert(s.emitter != nil, "emitter is required")
+	runv.Assert(s.emitters != nil, "emitters is required")
 	if s.donectx == nil || s.donefun == nil {
 		s.donectx, s.donefun = context.WithCancel(context.TODO())
 	}
@@ -42,10 +42,12 @@ func (s *SlimSource) Context() context.Context {
 	return s.donectx
 }
 
-func (s *SlimSource) SetEmitter(e flow.Emitter) {
-	s.emitter = e
+func (s *SlimSource) AddEmitter(e flow.Emitter) {
+	s.emitters = append(s.emitters, e)
 }
 
 func (s *SlimSource) Emit(ctx flow.StateContext, event flow.Event) {
-	s.emitter.Emit(ctx, event)
+	for _, emitter := range s.emitters {
+		emitter.Emit(ctx, event)
+	}
 }

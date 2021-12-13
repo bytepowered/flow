@@ -80,7 +80,7 @@ func (e *EventEngine) Bind(sourceTag string, router *Router) {
 		router.emitter = e.doAsyncEmitFunc
 	}
 	// bind source
-	source.SetEmitter(router)
+	source.AddEmitter(router)
 	e._routers = append(e._routers, router)
 	e.xlog().Infof("bind router, source.tag: %s", sourceTag)
 }
