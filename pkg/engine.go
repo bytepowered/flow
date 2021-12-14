@@ -140,9 +140,11 @@ func (e *EventEngine) flat(group GroupRouterW) []RouterW {
 
 func (e *EventEngine) compile(groups []GroupRouterW) {
 	for _, grp := range groups {
-		for _, router := range e.flat(grp) {
-			pipe := NewRouterOf(e.doAsyncEmitFunc)
-			e.Bind(router.SourceTag, e.lookup(pipe, router))
+		Log().Infof("bind router group, group: %+v", grp)
+		for _, routew := range e.flat(grp) {
+			router := NewRouterOf(e.doAsyncEmitFunc)
+			Log().Infof("bind router, src.tag: %s, route: %+v", routew.SourceTag, routew)
+			e.Bind(routew.SourceTag, e.lookup(router, routew))
 		}
 	}
 }

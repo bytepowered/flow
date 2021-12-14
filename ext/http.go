@@ -1,4 +1,4 @@
-package extends
+package ext
 
 import (
 	"context"
@@ -26,7 +26,7 @@ type HttpOptions struct {
 }
 
 type HttpServer struct {
-	state   *ext.StateWorker
+	*ext.StateWorker
 	conkey  string
 	server  *http.Server
 	routerf func() http.Handler
@@ -34,6 +34,7 @@ type HttpServer struct {
 
 func NewHttpServer(opts ...HttpServerOption) *HttpServer {
 	hs := &HttpServer{
+		StateWorker: ext.NewStateWorker(context.TODO()),
 		routerf: func() http.Handler {
 			return http.DefaultServeMux
 		},
@@ -59,7 +60,7 @@ func (h *HttpServer) OnInit() error {
 		Addr:    opts.address,
 		Handler: h.routerf(),
 	}
-	h.state.AddStateTask("http-server", func(ctx context.Context) error {
+	h.AddStateTask("http-server", func(ctx context.Context) error {
 		h.server.BaseContext = func(l net.Listener) context.Context {
 			return context.WithValue(ctx, "conn.address", opts.address)
 		}
@@ -91,23 +92,23 @@ func (h *HttpServer) ServerHandler() http.Handler {
 }
 
 func (h *HttpServer) Startup(ctx context.Context) error {
-	return h.state.Startup(ctx)
+	return h.StateWorker.Startup(ctx)
 }
 
 func (h *HttpServer) Shutdown(ctx context.Context) error {
 	if err := h.server.Shutdown(ctx); err != nil {
 		flow.Log().Errorf("http-server shutdown, error: %s", err)
 	}
-	return h.state.Shutdown(ctx)
+	return h.StateWorker.Shutdown(ctx)
 }
 
-func WithHttpRouterFactory(factory func() http.Handler) HttpServerOption {
+func WithRouterFactory(factory func() http.Handler) HttpServerOption {
 	return func(s *HttpServer) {
 		s.routerf = factory
 	}
 }
 
-func WithHttpConfigKey(key string) HttpServerOption {
+func WithConfigKey(key string) HttpServerOption {
 	return func(s *HttpServer) {
 		s.conkey = key
 	}
