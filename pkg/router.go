@@ -7,20 +7,20 @@ import (
 
 var _ Emitter = new(Router)
 
-type GroupRouterW struct {
-	GroupId      string   `toml:"group"`
+type GroupDescriptor struct {
+	Description  string   `toml:"description"`  // 路由分组描述
 	Sources      []string `toml:"sources"`      // 匹配Source的Tag Pattern
 	Filters      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
 	Transformers []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
 	Outputs      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
 }
 
-type RouterW struct {
-	SourceTag    string
-	GroupId      string
-	Filters      []string
-	Transformers []string
-	Outputs      []string
+type router struct {
+	description  string
+	source       string
+	filters      []string
+	transformers []string
+	outputs      []string
 }
 
 type RouterEmitFunc func(*Router, StateContext, Event)

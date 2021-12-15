@@ -33,9 +33,11 @@ type Header struct {
 
 // Event 具体Event消息接口
 type Event interface {
-	// Tag 返回事件标签
+	// Tag 返回事件标签。与 Header.Tag 一致。
 	Tag() string
-	// Time 返回事件发生时间
+	// Kind 返回事件类型。与 Header.Kind 一致。
+	Kind() Kind
+	// Time 返回事件发生时间。与 Header.Time 一致。
 	Time() time.Time
 	// Header 返回事件Header
 	Header() Header
