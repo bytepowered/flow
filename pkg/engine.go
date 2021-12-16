@@ -126,13 +126,13 @@ func (e *EventEngine) SetTransformers(v []Transformer) {
 
 func (e *EventEngine) flat(group GroupDescriptor) []router {
 	routers := make([]router, 0, len(e._sources))
-	TagMatcher(group.SourceTags).match(e._sources, func(v interface{}) {
+	TagMatcher(group.Selector.SourceTags).match(e._sources, func(v interface{}) {
 		routers = append(routers, router{
 			description:     group.Description,
 			SourceTag:       v.(Source).Tag(),
-			FilterTags:      group.FilterTags,
-			TransformerTags: group.TransformerTags,
-			OutputTags:      group.OutputTags,
+			FilterTags:      group.Selector.FilterTags,
+			TransformerTags: group.Selector.TransformerTags,
+			OutputTags:      group.Selector.OutputTags,
 		})
 	})
 	return routers
@@ -141,8 +141,8 @@ func (e *EventEngine) flat(group GroupDescriptor) []router {
 func (e *EventEngine) compile(groups []GroupDescriptor) {
 	for _, group := range groups {
 		runv.Assert(group.Description != "", "router group, 'description' is required")
-		runv.Assert(len(group.SourceTags) > 0, "router group, 'source-tags' is required")
-		runv.Assert(len(group.OutputTags) > 0, "router group, 'output-tags' is required")
+		runv.Assert(len(group.Selector.SourceTags) > 0, "router group, selector 'source-tags' is required")
+		runv.Assert(len(group.Selector.OutputTags) > 0, "router group, selector 'output-tags' is required")
 		verify := func(tags []string, msg, src string) {
 			for _, t := range tags {
 				runv.Assert(len(t) >= 3, msg, t, src)
