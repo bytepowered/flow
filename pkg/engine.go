@@ -126,13 +126,13 @@ func (e *EventEngine) SetTransformers(v []Transformer) {
 
 func (e *EventEngine) flat(group GroupDescriptor) []router {
 	routers := make([]router, 0, len(e._sources))
-	TagMatcher(group.Sources).match(e._sources, func(v interface{}) {
+	TagMatcher(group.SourceTags).match(e._sources, func(v interface{}) {
 		routers = append(routers, router{
-			source:       v.(Source).Tag(),
-			description:  group.Description,
-			filters:      group.Filters,
-			transformers: group.Transformers,
-			outputs:      group.Outputs,
+			description:     group.Description,
+			SourceTag:       v.(Source).Tag(),
+			FilterTags:      group.FilterTags,
+			TransformerTags: group.TransformerTags,
+			OutputTags:      group.OutputTags,
 		})
 	})
 	return routers
@@ -140,25 +140,37 @@ func (e *EventEngine) flat(group GroupDescriptor) []router {
 
 func (e *EventEngine) compile(groups []GroupDescriptor) {
 	for _, group := range groups {
+		runv.Assert(group.Description != "", "router group, 'description' is required")
+		runv.Assert(len(group.SourceTags) > 0, "router group, 'source-tags' is required")
+		runv.Assert(len(group.OutputTags) > 0, "router group, 'output-tags' is required")
+		verify := func(tags []string, msg, src string) {
+			for _, t := range tags {
+				runv.Assert(len(t) >= 3, msg, t, src)
+			}
+		}
 		for _, rw := range e.flat(group) {
+			runv.Assert(len(rw.SourceTag) >= 3, "router, 'source-tag' is invalid, tag: "+rw.SourceTag+", group: "+group.Description)
+			verify(rw.FilterTags, "router, 'filter-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
+			verify(rw.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
+			verify(rw.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
 			nr := NewRouterOf(e.doAsyncEmitFunc)
-			Log().Infof("bind router, src.tag: %s, route: %+v, group: %s", rw.source, rw, group.Description)
-			e.Bind(rw.source, e.lookup(nr, rw))
+			Log().Infof("bind router, src.tag: %s, route: %+v, desc: %s", rw.SourceTag, rw, group.Description)
+			e.Bind(rw.SourceTag, e.lookup(nr, rw))
 		}
 	}
 }
 
 func (e *EventEngine) lookup(router *Router, rw router) *Router {
 	// filters
-	TagMatcher(rw.filters).match(e._filters, func(v interface{}) {
+	TagMatcher(rw.FilterTags).match(e._filters, func(v interface{}) {
 		router.AddFilter(v.(Filter))
 	})
 	// transformer
-	TagMatcher(rw.transformers).match(e._transformers, func(v interface{}) {
+	TagMatcher(rw.TransformerTags).match(e._transformers, func(v interface{}) {
 		router.AddTransformer(v.(Transformer))
 	})
 	// output
-	TagMatcher(rw.outputs).match(e._outputs, func(v interface{}) {
+	TagMatcher(rw.OutputTags).match(e._outputs, func(v interface{}) {
 		router.AddOutput(v.(Output))
 	})
 	return router

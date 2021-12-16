@@ -7,7 +7,6 @@ import (
 
 var _ flow.Filter = new(KindFilter)
 var _ runv.Initable = new(KindFilter)
-var _ runv.Disabled = new(KindFilter)
 
 type KindOptions struct {
 	Allowed  []flow.Kind `toml:"allow-kinds"`
@@ -15,32 +14,24 @@ type KindOptions struct {
 }
 
 type KindConfig struct {
+	Tag                     string `toml:"tag"`
 	flow.BasedConfiguration `toml:",squash"`
 	Opts                    KindOptions `toml:"configuration"`
 }
 
 type KindFilter struct {
-	*GlobalFilter
 	config KindConfig
 }
 
 func NewKindFilter() *KindFilter {
-	return &KindFilter{
-		GlobalFilter: &GlobalFilter{
-			TypeTag: "skip.kind",
-		},
-	}
+	return &KindFilter{}
 }
 
-func (h *KindFilter) Disabled() (reason string, disable bool) {
-	return flow.LookupStateOf(flow.ConfigRootFilter, h.TypeId())
+func (h *KindFilter) Tag() string {
+	return h.config.Tag
 }
 
 func (h *KindFilter) OnInit() error {
-	_, err := flow.RootConfigOf(flow.ConfigRootFilter).Lookup(h.TypeId(), &h.config)
-	if err != nil {
-		return err
-	}
 	runv.Assert(len(h.config.Opts.Allowed)+len(h.config.Opts.Rejected) > 0, "allows/rejects is required")
 	return nil
 }
@@ -60,7 +51,7 @@ func (h *KindFilter) DoFilter(next flow.FilterFunc) flow.FilterFunc {
 	}
 }
 
-func (h *KindFilter) UpdateConfig(c KindConfig) *KindFilter {
+func (h *KindFilter) Update(c KindConfig) *KindFilter {
 	h.config = c
 	return h
 }

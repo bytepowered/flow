@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	TagGLOBAL = "@globals."
+	TagGLOBAL = "@global"
 )
 
 // Kind 表示Event类型
@@ -55,11 +55,9 @@ const (
 	//StateXX    State = 0x00000008
 )
 
-type Component interface {
+type Plugin interface {
 	// Tag 返回标识实现对象的标签
 	Tag() string
-	// TypeId 返回实现类型的ID
-	TypeId() string
 }
 
 // StateContext 发生Event的上下文
@@ -90,7 +88,7 @@ type Formatter interface {
 
 // Source 数据源适配接口。
 type Source interface {
-	Component
+	Plugin
 	runv.Liveness
 	AddEmitter(emitter Emitter)
 	Emit(ctx StateContext, event Event)
@@ -101,18 +99,18 @@ type FilterFunc func(ctx StateContext, event Event) error
 
 // Filter 原始Event过滤接口
 type Filter interface {
-	Component
+	Plugin
 	DoFilter(next FilterFunc) FilterFunc
 }
 
 // Transformer 处理Event格式转换
 type Transformer interface {
-	Component
+	Plugin
 	DoTransform(Event) (Event, error)
 }
 
 // Output Event输出接口
 type Output interface {
-	Component
+	Plugin
 	Send(Event) error
 }

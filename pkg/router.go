@@ -8,19 +8,19 @@ import (
 var _ Emitter = new(Router)
 
 type GroupDescriptor struct {
-	Description  string   `toml:"description"`  // 路由分组描述
-	Sources      []string `toml:"sources"`      // 匹配Source的Tag Pattern
-	Filters      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
-	Transformers []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
-	Outputs      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
+	Description     string   `toml:"description"`  // 路由分组描述
+	SourceTags      []string `toml:"sources"`      // 匹配Source的Tag Pattern
+	FilterTags      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
+	TransformerTags []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
+	OutputTags      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
 }
 
 type router struct {
-	description  string
-	source       string
-	filters      []string
-	transformers []string
-	outputs      []string
+	description     string
+	SourceTag       string
+	FilterTags      []string
+	TransformerTags []string
+	OutputTags      []string
 }
 
 type RouterEmitFunc func(*Router, StateContext, Event)
