@@ -6,7 +6,6 @@ import (
 	"github.com/Jeffail/tunny"
 	"github.com/bytepowered/runv"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -44,7 +43,7 @@ func (e *EventEngine) OnInit() error {
 	runv.Assert(0 < len(e._sources), "engine.sources is required")
 	runv.Assert(0 < len(e._outputs), "engine.outputs is required")
 	groups := make([]GroupDescriptor, 0)
-	if err := viper.UnmarshalKey("router", &groups); err != nil {
+	if err := UnmarshalKey("router", &groups); err != nil {
 		return fmt.Errorf("load 'routers' config error: %w", err)
 	}
 	e.compile(groups)

@@ -16,9 +16,10 @@ const (
 	ConfigKeyDisabled = "disabled"
 )
 
+const configTagName = "toml"
+
 // BasedConfiguration 基础配置必要的字段
 type BasedConfiguration struct {
-	TypeId      string `toml:"type-id"`
 	Tag         string `toml:"tag"`
 	Description string `toml:"description"`
 }
@@ -39,7 +40,7 @@ func (c Configuration) StringOf(key string) string {
 	return cast.ToString(c[key])
 }
 
-func (c Configuration) StringSliceOf(key string) []string {
+func (c Configuration) SliceOf(key string) []string {
 	return cast.ToStringSlice(c[key])
 }
 
@@ -54,7 +55,7 @@ func (c Configurations) Lookup(typeid string, outptr interface{}) (bool, error) 
 	for _, m := range c {
 		if typeid == m.StringOf(ConfigKeyTypeId) {
 			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-				TagName:  "toml",
+				TagName:  configTagName,
 				Squash:   true,
 				Metadata: nil,
 				Result:   outptr,
@@ -83,8 +84,24 @@ func RootConfigOf(root string) Configurations {
 	cs, ok := _ccached[root]
 	if !ok {
 		cs = make([]Configuration, 0)
-		_ = viper.UnmarshalKey(root, &cs)
+		_ = UnmarshalKey(root, &cs)
 		_ccached[root] = cs
 	}
 	return cs
+}
+
+func UnmarshalKey(key string, valptr interface{}) error {
+	return viper.UnmarshalKey(key, valptr, withTomlTag(configTagName), withSlash(true))
+}
+
+func withTomlTag(tag string) func(config *mapstructure.DecoderConfig) {
+	return func(c *mapstructure.DecoderConfig) {
+		c.TagName = tag
+	}
+}
+
+func withSlash(squash bool) func(config *mapstructure.DecoderConfig) {
+	return func(c *mapstructure.DecoderConfig) {
+		c.Squash = squash
+	}
 }
