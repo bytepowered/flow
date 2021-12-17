@@ -7,6 +7,7 @@ import (
 var (
 	_ runv.Liveorder = OrderedPlugin{}
 	_ runv.Liveorder = OrderedSource{}
+	_ runv.Liveorder = OrderedOutput{}
 )
 
 const (
