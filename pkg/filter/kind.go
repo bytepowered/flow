@@ -14,7 +14,6 @@ type KindOptions struct {
 }
 
 type KindConfig struct {
-	Tag                     string `toml:"tag"`
 	flow.BasedConfiguration `toml:",squash"`
 	Opts                    KindOptions `toml:"configuration"`
 }

@@ -13,12 +13,12 @@ func metrics() *coremetrics {
 	return _metric
 }
 
-func (m *coremetrics) NewTimer(stage, action string) *prometheus.Timer {
-	return prometheus.NewTimer(m.NewObserver(stage, action))
+func (m *coremetrics) NewTimer(tag, action string) *prometheus.Timer {
+	return prometheus.NewTimer(m.NewObserver(tag, action))
 }
 
-func (m *coremetrics) NewObserver(stage, action string) prometheus.Observer {
-	return m.performance.WithLabelValues(stage, action)
+func (m *coremetrics) NewObserver(tag, action string) prometheus.Observer {
+	return m.performance.WithLabelValues(tag, action)
 }
 
 func (m *coremetrics) NewCounter(tag, action string) prometheus.Counter {
@@ -31,16 +31,16 @@ func newMetrics() *coremetrics {
 		counter: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: ns,
 			Subsystem: "core",
-			Name:      "count",
-			Help:      "Source action with tag",
+			Name:      "event_count",
+			Help:      "指定Tag的事件计数",
 		}, []string{"tag", "action"}),
 		performance: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: ns,
 			Subsystem: "core",
 			Name:      "action_duration",
-			Help:      "核心处理性能",
+			Help:      "指定Tag的事件计数处理性能",
 			Buckets:   prometheus.LinearBuckets(1, 0.5, 50),
-		}, []string{"stage", "action"}),
+		}, []string{"tag", "action"}),
 	}
 }
 

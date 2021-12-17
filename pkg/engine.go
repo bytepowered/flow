@@ -180,11 +180,11 @@ func (e *EventEngine) lookup(router *Router, rw router) *Router {
 	return router
 }
 
-func (e *EventEngine) xlog() *logrus.Logger {
-	return Log().WithField("app", "engine").Logger
+func (e *EventEngine) xlog() *logrus.Entry {
+	return Log().WithField("app", "engine")
 }
 
-func WithWorkerSize(size uint) EventEngineOption {
+func WithCoroutineSize(size uint) EventEngineOption {
 	return func(d *EventEngine) {
 		d.coroutines.SetSize(int(size))
 	}

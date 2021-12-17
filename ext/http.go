@@ -64,12 +64,13 @@ func (h *HttpServer) OnInit() error {
 		h.server.BaseContext = func(l net.Listener) context.Context {
 			return context.WithValue(ctx, "conn.address", opts.address)
 		}
+		xlog := flow.Log().WithField("addr", opts.address)
 		var err error
 		if opts.tlscert != "" && opts.tlskey != "" {
-			flow.Log().Infof("server listen serve[TLS]")
+			xlog.Infof("server listen serve[TLS]")
 			err = h.server.ListenAndServeTLS(opts.tlscert, opts.tlskey)
 		} else {
-			flow.Log().Infof("server listen serve")
+			xlog.Infof("server listen serve")
 			err = h.server.ListenAndServe()
 		}
 		if err != nil {
