@@ -7,6 +7,7 @@ import (
 )
 
 var _ runv.Liveness = new(SlimSource)
+var _ runv.Liveorder = new(SlimSource)
 
 type SlimSource struct {
 	emitters []flow.Emitter
@@ -49,5 +50,17 @@ func (s *SlimSource) AddEmitter(e flow.Emitter) {
 func (s *SlimSource) Emit(ctx flow.StateContext, event flow.Event) {
 	for _, emitter := range s.emitters {
 		emitter.Emit(ctx, event)
+	}
+}
+
+func (*SlimSource) Order(state runv.State) int {
+	// Source: 关闭优先，启动靠后
+	switch state {
+	case runv.StateShutdown:
+		return -1000
+	case runv.StateStartup:
+		return 1000
+	default:
+		return 0
 	}
 }

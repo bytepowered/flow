@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	_ runv.Initable = new(EventEngine)
-	_ runv.Liveness = new(EventEngine)
+	_ runv.Initable  = new(EventEngine)
+	_ runv.Liveness  = new(EventEngine)
+	_ runv.Liveorder = new(EventEngine)
 )
 
 type EventEngineOption func(*EventEngine)
@@ -121,6 +122,10 @@ func (e *EventEngine) SetFilters(v []Filter) {
 
 func (e *EventEngine) SetTransformers(v []Transformer) {
 	e._transformers = v
+}
+
+func (e *EventEngine) Order(state runv.State) int {
+	return 100000 // 所有生命周期都靠后
 }
 
 func (e *EventEngine) flat(group GroupDescriptor) []router {
