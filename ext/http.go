@@ -64,20 +64,19 @@ func (h *HttpServer) OnInit() error {
 		h.server.BaseContext = func(l net.Listener) context.Context {
 			return context.WithValue(ctx, "conn.address", opts.address)
 		}
-		xlog := flow.Log().WithField("addr", opts.address)
 		var err error
 		if opts.tlscert != "" && opts.tlskey != "" {
-			xlog.Infof("server listen serve[TLS]")
+			flow.Log().Infof("server listen serve[TLS], addr: %s", opts.address)
 			err = h.server.ListenAndServeTLS(opts.tlscert, opts.tlskey)
 		} else {
-			xlog.Infof("server listen serve")
+			flow.Log().Infof("server listen serve, addr: %s", opts.address)
 			err = h.server.ListenAndServe()
 		}
 		if err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
 				return nil
 			}
-			return fmt.Errorf("server listener error: %w", err)
+			return fmt.Errorf("server listener, addr: %s, error: %w", opts.address, err)
 		}
 		return nil
 	})
