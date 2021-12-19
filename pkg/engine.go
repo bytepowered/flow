@@ -158,7 +158,7 @@ func (e *EventEngine) compile(groups []GroupDescriptor) {
 			verify(rw.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
 			verify(rw.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
 			nr := NewRouterOf(e.doAsyncEmitFunc)
-			Log().Infof("bind router, src.tag: %s, route: %+v, desc: %s", rw.SourceTag, rw, group.Description)
+			Log().Infof("bind router, src.tag: %s, route: %+v", rw.SourceTag, rw)
 			e.Bind(rw.SourceTag, e.lookup(nr, rw))
 		}
 	}
