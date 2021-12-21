@@ -4,6 +4,10 @@ var (
 	_KindNames = make(map[Kind]string, 8)
 )
 
+func KindNames() map[Kind]string {
+	return _KindNames
+}
+
 func SetKindNames(kv map[Kind]string) {
 	_KindNames = kv
 }
