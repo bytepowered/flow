@@ -91,7 +91,11 @@ func RootConfigOf(root string) Configurations {
 }
 
 func UnmarshalKey(key string, valptr interface{}) error {
-	return viper.UnmarshalKey(key, valptr, withTomlTag(configTagName), withSlash(true))
+	return UnmarshalKeyWith(key, configTagName, valptr)
+}
+
+func UnmarshalKeyWith(key, tagName string, valptr interface{}) error {
+	return viper.UnmarshalKey(key, valptr, withTomlTag(tagName), withSlash(true))
 }
 
 func withTomlTag(tag string) func(config *mapstructure.DecoderConfig) {

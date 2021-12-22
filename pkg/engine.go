@@ -28,9 +28,11 @@ type EventEngine struct {
 func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 	engine := &EventEngine{}
 	engine.coroutines = tunny.NewFunc(1000, func(i interface{}) interface{} {
-		args := i.([]interface{})
-		nr, ctx, event := args[0].(*Router), args[1].(StateContext), args[2].(Event)
-		return engine.onRouterWorkFunc(nr, ctx, event)
+		vals := i.([]interface{})
+		return engine.onRouterWorkFunc(
+			vals[0].(*Router),
+			vals[1].(StateContext),
+			vals[2].(Event))
 	})
 	for _, opt := range opts {
 		opt(engine)
@@ -73,8 +75,8 @@ func (e *EventEngine) Bind(sourceTag string, router *Router) {
 		}
 		return nil, false
 	}(sourceTag)
-	runv.Assert(ok, "source is required, source.tag: "+sourceTag)
-	runv.Assert(len(router.outputs) > 0, "outputs is required, source.tag: "+sourceTag)
+	runv.Assert(ok, "bind router: source is required, source.tag: "+sourceTag)
+	runv.Assert(len(router.outputs) > 0, "bind router: outputs is required, source.tag: "+sourceTag)
 	// bind async emit func
 	if router.emitter == nil {
 		router.emitter = e.doAsyncEmitFunc
@@ -82,7 +84,7 @@ func (e *EventEngine) Bind(sourceTag string, router *Router) {
 	// bind source
 	source.AddEmitter(router)
 	e._routers = append(e._routers, router)
-	e.xlog().Infof("bind router, source.tag: %s", sourceTag)
+	e.xlog().Infof("bind router: OK, source.tag: %s", sourceTag)
 }
 
 func (e *EventEngine) onRouterWorkFunc(router *Router, ctx StateContext, record Event) error {
