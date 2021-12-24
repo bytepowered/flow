@@ -1,4 +1,4 @@
-package ext
+package http
 
 import (
 	"context"
@@ -13,27 +13,27 @@ import (
 )
 
 var (
-	_ runv.Liveness = new(HttpServer)
-	_ runv.Initable = new(HttpServer)
+	_ runv.Liveness = new(Server)
+	_ runv.Initable = new(Server)
 )
 
-type HttpServerOption func(s *HttpServer)
+type ServerOption func(s *Server)
 
-type HttpOptions struct {
+type Options struct {
 	address string
 	tlscert string
 	tlskey  string
 }
 
-type HttpServer struct {
+type Server struct {
 	*ext.StateWorker
 	conkey  string
 	server  *http.Server
 	routerf func() http.Handler
 }
 
-func NewHttpServer(opts ...HttpServerOption) *HttpServer {
-	hs := &HttpServer{
+func NewServer(opts ...ServerOption) *Server {
+	hs := &Server{
 		StateWorker: ext.NewStateWorker(context.TODO()),
 		routerf: func() http.Handler {
 			return http.DefaultServeMux
@@ -46,12 +46,12 @@ func NewHttpServer(opts ...HttpServerOption) *HttpServer {
 	return hs
 }
 
-func (h *HttpServer) OnInit() error {
+func (h *Server) OnInit() error {
 	mkey := func(k string) string {
 		return "http." + h.conkey + "." + k
 	}
 	viper.SetDefault(mkey("address"), "0.0.0.0:8000")
-	opts := HttpOptions{
+	opts := Options{
 		address: viper.GetString(mkey("address")),
 		tlscert: viper.GetString(mkey("tlsCert")),
 		tlskey:  viper.GetString(mkey("tlsKey")),
@@ -83,33 +83,33 @@ func (h *HttpServer) OnInit() error {
 	return nil
 }
 
-func (h *HttpServer) Server() *http.Server {
+func (h *Server) Server() *http.Server {
 	return h.server
 }
 
-func (h *HttpServer) ServerHandler() http.Handler {
+func (h *Server) ServerHandler() http.Handler {
 	return h.server.Handler
 }
 
-func (h *HttpServer) Startup(ctx context.Context) error {
+func (h *Server) Startup(ctx context.Context) error {
 	return h.StateWorker.Startup(ctx)
 }
 
-func (h *HttpServer) Shutdown(ctx context.Context) error {
+func (h *Server) Shutdown(ctx context.Context) error {
 	if err := h.server.Shutdown(ctx); err != nil {
 		flow.Log().Errorf("http-server shutdown, error: %s", err)
 	}
 	return h.StateWorker.Shutdown(ctx)
 }
 
-func WithRouterFactory(factory func() http.Handler) HttpServerOption {
-	return func(s *HttpServer) {
+func WithRouterFactory(factory func() http.Handler) ServerOption {
+	return func(s *Server) {
 		s.routerf = factory
 	}
 }
 
-func WithConfigKey(key string) HttpServerOption {
-	return func(s *HttpServer) {
+func WithConfigKey(key string) ServerOption {
+	return func(s *Server) {
 		s.conkey = key
 	}
 }
