@@ -1,8 +1,6 @@
 package ext
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"net"
 	"testing"
@@ -19,18 +17,15 @@ func TestConnection(t *testing.T) {
 		fmt.Println(err)
 		return true
 	}), WithRecvFunc(func(conn net.Conn) error {
-		r := bufio.NewReader(conn)
-		line, _, err := r.ReadLine()
+		meta := make([]byte, 3)
+		_, err := conn.Read(meta)
 		if err != nil {
 			return err
 		}
-		buf := new(bytes.Buffer)
-		buf.Write(line)
-		fmt.Println(buf.String())
 		return nil
 	}))
 
-	time.AfterFunc(time.Second*30, func() {
+	time.AfterFunc(time.Minute*5, func() {
 		conn.Shutdown()
 	})
 	defer conn.Close()
