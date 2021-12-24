@@ -29,6 +29,9 @@ type NetConfig struct {
 	// TCP
 	TCPNoDelay   bool `toml:"tcp-no-delay"`
 	TCPKeepAlive uint `toml:"tcp-keep-alive"`
+	// Connection
+	WriteTimeout time.Duration `toml:"write-timeout"`
+	ReadTimeout  time.Duration `toml:"read-timeout"`
 }
 
 type NetOptions func(c *NetConnection)
@@ -39,10 +42,12 @@ type NetConnection struct {
 	onRecvFunc OnNetRecvFunc
 	onErrFunc  OnNetErrorFunc
 	onDialFunc OnNetDialFunc
-	conn       net.Conn
 	config     NetConfig
-	downctx context.Context
-	downfun context.CancelFunc
+	downctx    context.Context
+	downfun    context.CancelFunc
+	conn       net.Conn
+	sendq      chan []byte
+	sendqs     uint
 }
 
 func NewNetConnection(config NetConfig, opts ...NetOptions) *NetConnection {
@@ -53,6 +58,7 @@ func NewNetConnection(config NetConfig, opts ...NetOptions) *NetConnection {
 		config:     config,
 		onDialFunc: OnTCPDialFunc,
 		onOpenFunc: OnTCPOpenFunc,
+		sendqs:     10,
 	}
 	for _, opt := range opts {
 		opt(nc)
@@ -91,6 +97,9 @@ func (tc *NetConnection) Listen() {
 	runv.AssertNNil(tc.onErrFunc, "'onErrFunc' is required")
 	runv.AssertNNil(tc.onDialFunc, "'onDialFunc' is required")
 	runv.AssertNNil(tc.onOpenFunc, "'onOpenFunc' is required")
+	tc.config.WriteTimeout = tc.duration(tc.config.WriteTimeout, time.Second, time.Second*10)
+	tc.config.ReadTimeout = tc.duration(tc.config.ReadTimeout, time.Second, time.Second*10)
+	tc.config.RetryDelay = tc.duration(tc.config.RetryDelay, time.Second, time.Second*5)
 	// 通过Connect信号来控制自动重连
 	signals := make(chan struct{}, 1)
 	closed := make(chan struct{}, 1)
@@ -101,7 +110,7 @@ func (tc *NetConnection) Listen() {
 			closed <- struct{}{}
 		} else {
 			count++
-			time.Sleep(tc.delay(tc.config.RetryDelay, time.Second, time.Second))
+			time.Sleep(tc.config.RetryDelay)
 			signals <- struct{}{}
 		}
 	}
@@ -125,6 +134,8 @@ func (tc *NetConnection) Listen() {
 					retry()
 				} else {
 					count = 0
+					// FIXME 处理存留未发送队列
+					tc.sendq = make(chan []byte, tc.sendqs)
 					flow.Log().Infof("connected: %s OK", addr)
 					tc.conn = conn
 				}
@@ -133,13 +144,19 @@ func (tc *NetConnection) Listen() {
 		case <-closed:
 			return
 
+		case data := <-tc.sendq:
+			if err := tc.conn.SetWriteDeadline(time.Now().Add(tc.config.WriteTimeout)); err != nil {
+				tc.onErrFunc(fmt.Errorf("connection write error: %w", err))
+			} else if n, err := tc.conn.Write(data); err != nil {
+				tc.onErrFunc(fmt.Errorf("connection write bytes error, bytes: %d %w", n, err))
+			}
+
 		default:
+			_ = tc.conn.SetReadDeadline(time.Now().Add(tc.config.ReadTimeout))
 			if buffer, err := tc.onReadFunc(tc.conn); err == nil {
 				tc.onRecvFunc(tc.conn, buffer)
 			} else if ne, ok := err.(net.Error); ok && (ne.Temporary() || ne.Timeout()) {
-				delay = tc.delay(delay, time.Millisecond*5, time.Millisecond*100)
-				flow.Log().Warnf("connection read error: %v; retrying in %v", err, delay)
-				time.Sleep(delay)
+				time.Sleep(tc.duration(delay, time.Millisecond*5, time.Millisecond*100))
 			} else {
 				tc.onErrFunc(err)
 				retry()
@@ -152,6 +169,19 @@ func (tc *NetConnection) Shutdown() {
 	tc.downfun()
 }
 
+func (tc *NetConnection) Done() <-chan struct{} {
+	return tc.downctx.Done()
+}
+
+func (tc *NetConnection) Send(data []byte) {
+	select {
+	case <-tc.downctx.Done():
+		flow.Log().Errorf("send data to closed connection: %s", tc.config.RemoteAddress)
+	default:
+		tc.sendq <- data
+	}
+}
+
 func (tc *NetConnection) Close() {
 	if tc.conn == nil {
 		return
@@ -161,16 +191,16 @@ func (tc *NetConnection) Close() {
 	}
 }
 
-func (tc *NetConnection) delay(delay time.Duration, def, max time.Duration) time.Duration {
-	if delay == 0 {
-		delay = def
+func (tc *NetConnection) duration(v time.Duration, def, max time.Duration) time.Duration {
+	if v == 0 {
+		v = def
 	} else {
-		delay *= 2
+		v *= 2
 	}
-	if delay > max {
-		delay = max
+	if v > max {
+		v = max
 	}
-	return delay
+	return v
 }
 
 func WithOpenFunc(f OnNetOpenFunc) NetOptions {
@@ -200,6 +230,12 @@ func WithErrorFunc(f OnNetErrorFunc) NetOptions {
 func WithDailFunc(f OnNetDialFunc) NetOptions {
 	return func(c *NetConnection) {
 		c.onDialFunc = f
+	}
+}
+
+func WithSendSize(size uint) NetOptions {
+	return func(c *NetConnection) {
+		c.sendqs = size
 	}
 }
 

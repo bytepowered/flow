@@ -29,6 +29,23 @@ func TestConnection(t *testing.T) {
 	}), WithRecvFunc(func(conn net.Conn, buffer *bytes.Buffer) {
 		fmt.Println(buffer.String())
 	}))
+	conn.SetOpenFunc(func(c net.Conn, config NetConfig) error {
+		go func() {
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-conn.Done():
+					return
+
+				case <-ticker.C:
+					conn.Send([]byte(fmt.Sprintf("-> %s\r\n", time.Now())))
+				}
+			}
+		}()
+		return OnTCPOpenFunc(c, config)
+	})
+
 	time.AfterFunc(time.Second*30, func() {
 		conn.Shutdown()
 	})
