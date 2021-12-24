@@ -15,36 +15,20 @@ func TestConnection(t *testing.T) {
 		RemoteAddress: "127.0.0.1:8888",
 		RetryMax:      -1,
 		RetryDelay:    time.Second,
-	}, WithErrorFunc(func(err error) {
+	}, WithErrorFunc(func(conn *NetConnection, err error) (continued bool) {
 		fmt.Println(err)
-	}), WithReadFunc(func(conn net.Conn) (*bytes.Buffer, error) {
+		return true
+	}), WithRecvFunc(func(conn net.Conn) error {
 		r := bufio.NewReader(conn)
 		line, _, err := r.ReadLine()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		buf := new(bytes.Buffer)
 		buf.Write(line)
-		return buf, nil
-	}), WithRecvFunc(func(conn net.Conn, buffer *bytes.Buffer) {
-		fmt.Println(buffer.String())
+		fmt.Println(buf.String())
+		return nil
 	}))
-	conn.SetOpenFunc(func(c net.Conn, config NetConfig) error {
-		go func() {
-			ticker := time.NewTicker(time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-conn.Done():
-					return
-
-				case <-ticker.C:
-					conn.Send([]byte(fmt.Sprintf("-> %s\r\n", time.Now())))
-				}
-			}
-		}()
-		return OnTCPOpenFunc(c, config)
-	})
 
 	time.AfterFunc(time.Second*30, func() {
 		conn.Shutdown()
