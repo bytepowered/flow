@@ -14,6 +14,7 @@ import (
 type (
 	OnNetDialFunc  func(config NetConfig) (net.Conn, error)
 	OnNetOpenFunc  func(conn net.Conn, config NetConfig) error
+	OnNetCloseFunc func(conn net.Conn)
 	OnNetRecvFunc  func(conn net.Conn) error
 	OnNetErrorFunc func(conn *NetConnection, err error) (continued bool)
 )
@@ -35,24 +36,26 @@ type NetConfig struct {
 type NetOptions func(c *NetConnection)
 
 type NetConnection struct {
-	onOpenFunc OnNetOpenFunc
-	onRecvFunc OnNetRecvFunc
-	onErrFunc  OnNetErrorFunc
-	onDialFunc OnNetDialFunc
-	config     NetConfig
-	downctx    context.Context
-	downfun    context.CancelFunc
-	conn       net.Conn
+	onOpenFunc  OnNetOpenFunc
+	onCloseFunc OnNetCloseFunc
+	onRecvFunc  OnNetRecvFunc
+	onErrFunc   OnNetErrorFunc
+	onDialFunc  OnNetDialFunc
+	config      NetConfig
+	downctx     context.Context
+	downfun     context.CancelFunc
+	conn        net.Conn
 }
 
 func NewNetConnection(config NetConfig, opts ...NetOptions) *NetConnection {
 	ctx, fun := context.WithCancel(context.TODO())
 	nc := &NetConnection{
-		downctx:    ctx,
-		downfun:    fun,
-		config:     config,
-		onDialFunc: OnTCPDialFunc,
-		onOpenFunc: OnTCPOpenFunc,
+		downctx:     ctx,
+		downfun:     fun,
+		config:      config,
+		onDialFunc:  OnTCPDialFunc,
+		onOpenFunc:  OnTCPOpenFunc,
+		onCloseFunc: func(_ net.Conn) {},
 	}
 	for _, opt := range opts {
 		opt(nc)
@@ -70,7 +73,12 @@ func (nc *NetConnection) SetOpenFunc(f OnNetOpenFunc) *NetConnection {
 	return nc
 }
 
-func (nc *NetConnection) SetReadFunc(f OnNetRecvFunc) *NetConnection {
+func (nc *NetConnection) SetCloseFunc(f OnNetCloseFunc) *NetConnection {
+	nc.onCloseFunc = f
+	return nc
+}
+
+func (nc *NetConnection) SetRecvFunc(f OnNetRecvFunc) *NetConnection {
 	nc.onRecvFunc = f
 	return nc
 }
@@ -89,14 +97,22 @@ func (nc *NetConnection) Listen() {
 	runv.AssertNNil(nc.onErrFunc, "'onErrFunc' is required")
 	runv.AssertNNil(nc.onDialFunc, "'onDialFunc' is required")
 	runv.AssertNNil(nc.onOpenFunc, "'onOpenFunc' is required")
+	runv.AssertNNil(nc.onCloseFunc, "'onCloseFunc' is required")
 	nc.config.ReadTimeout = nc.duration(nc.config.ReadTimeout, time.Second, time.Second*10)
 	nc.config.RetryDelay = nc.duration(nc.config.RetryDelay, time.Second, time.Second*5)
 	// 通过Connect信号来控制自动重连
-	signals := make(chan struct{}, 1)
-	closed := make(chan struct{}, 1)
-	count := int(0)
+	reconnsigs := make(chan struct{}, 1)
+	closesigs := make(chan struct{}, 1)
+	var (
+		count int
+		delay time.Duration
+	)
 	sendclose := func() {
-		closed <- struct{}{}
+		closesigs <- struct{}{}
+	}
+	restate := func() {
+		count = 0
+		delay = time.Millisecond * 5
 	}
 	retry := func(err error) {
 		select {
@@ -118,19 +134,17 @@ func (nc *NetConnection) Listen() {
 		} else {
 			count++
 			time.Sleep(nc.config.RetryDelay)
-			signals <- struct{}{}
+			reconnsigs <- struct{}{}
 		}
-
 	}
 	defer nc.Close()
-	delay := time.Millisecond * 5
-	signals <- struct{}{} // first connect
+	reconnsigs <- struct{}{} // first connect
 	for {
 		select {
 		case <-nc.downctx.Done():
 			return
 
-		case <-signals:
+		case <-reconnsigs:
 			addr := fmt.Sprintf("%s://%s", nc.config.Network, nc.config.RemoteAddress)
 			flow.Log().Infof("connecting to: %s", addr)
 			if conn, err := nc.onDialFunc(nc.config); err != nil {
@@ -138,12 +152,12 @@ func (nc *NetConnection) Listen() {
 			} else if err = nc.onOpenFunc(conn, nc.config); err != nil {
 				retry(fmt.Errorf("connection open: %w", err))
 			} else {
-				count = 0
+				restate()
 				flow.Log().Infof("connected: %s OK", addr)
 				nc.conn = conn
 			}
 
-		case <-closed:
+		case <-closesigs:
 			return
 
 		default:
@@ -172,6 +186,7 @@ func (nc *NetConnection) Close() {
 	if nc.conn == nil {
 		return
 	}
+	defer nc.onCloseFunc(nc.conn)
 	if err := nc.conn.Close(); err != nil && strings.Contains(err.Error(), "closed network connection") {
 		nc.onErrFunc(nc, fmt.Errorf("connection close: %w", err))
 	}
