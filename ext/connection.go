@@ -15,7 +15,7 @@ type (
 	OnNetDialFunc  func(config NetConfig) (net.Conn, error)
 	OnNetOpenFunc  func(conn net.Conn, config NetConfig) error
 	OnNetReadFunc  func(conn net.Conn) (*bytes.Buffer, error)
-	OnNetRecvFunc  func(conn net.Conn, buffer *bytes.Buffer)
+	OnNetRecvFunc  func(conn net.Conn, data *bytes.Buffer) error
 	OnNetErrorFunc func(err error)
 )
 
@@ -153,8 +153,10 @@ func (tc *NetConnection) Listen() {
 
 		default:
 			_ = tc.conn.SetReadDeadline(time.Now().Add(tc.config.ReadTimeout))
-			if buffer, err := tc.onReadFunc(tc.conn); err == nil {
-				tc.onRecvFunc(tc.conn, buffer)
+			if data, err := tc.onReadFunc(tc.conn); err == nil {
+				if err := tc.onRecvFunc(tc.conn, data); err != nil {
+					tc.onErrFunc(err)
+				}
 			} else if ne, ok := err.(net.Error); ok && (ne.Temporary() || ne.Timeout()) {
 				time.Sleep(tc.duration(delay, time.Millisecond*5, time.Millisecond*100))
 			} else {
