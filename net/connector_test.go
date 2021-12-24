@@ -8,12 +8,12 @@ import (
 )
 
 func TestConnection(t *testing.T) {
-	conn := NewNetConnection(NetConfig{
+	conn := NewConnector(Config{
 		Network:       "tcp",
 		RemoteAddress: "127.0.0.1:8888",
 		RetryMax:      -1,
 		RetryDelay:    time.Second,
-	}, WithErrorFunc(func(conn *NetConnection, err error) (continued bool) {
+	}, WithErrorFunc(func(conn *Connector, err error) (continued bool) {
 		fmt.Println(err)
 		return true
 	}), WithRecvFunc(func(conn net.Conn) error {
@@ -22,12 +22,11 @@ func TestConnection(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		fmt.Println(string(meta))
 		return nil
 	}))
-
 	time.AfterFunc(time.Minute*5, func() {
 		conn.Shutdown()
 	})
-	defer conn.Close()
-	conn.Listen()
+	conn.Serve()
 }
