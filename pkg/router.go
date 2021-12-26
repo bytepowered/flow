@@ -10,7 +10,7 @@ var _ Emitter = new(Router)
 type GroupDescriptor struct {
 	Description string `toml:"description"` // 路由分组描述
 	Selector    struct {
-		SourceTags      []string `toml:"sources"`      // 匹配Source的Tag Pattern
+		InputTags       []string `toml:"inputs"`       // 匹配Input的Tag Pattern
 		FilterTags      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
 		TransformerTags []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
 		OutputTags      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
@@ -19,7 +19,7 @@ type GroupDescriptor struct {
 
 type router struct {
 	description     string
-	SourceTag       string
+	InputTag        string
 	FilterTags      []string
 	TransformerTags []string
 	OutputTags      []string

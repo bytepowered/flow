@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	ConfigRootSource      = "source"
+	ConfigRootInput       = "input"
 	ConfigRootFilter      = "filter"
 	ConfigRootTransformer = "transformer"
 	ConfigRootOutput      = "output"
