@@ -29,7 +29,7 @@ func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 	engine := &EventEngine{}
 	engine.coroutines = tunny.NewFunc(1000, func(i interface{}) interface{} {
 		vals := i.([]interface{})
-		return engine.onRouterWorkFunc(
+		return engine.onEmitRouter(
 			vals[0].(*Router),
 			vals[1].(StateContext),
 			vals[2].(Event))
@@ -79,7 +79,7 @@ func (e *EventEngine) Bind(sourceTag string, router *Router) {
 	runv.Assert(len(router.outputs) > 0, "bind router: outputs is required, source.tag: "+sourceTag)
 	// bind async emit func
 	if router.emitter == nil {
-		router.emitter = e.doAsyncEmitFunc
+		router.emitter = e.doEmitFunc
 	}
 	// bind source
 	source.AddEmitter(router)
@@ -87,22 +87,22 @@ func (e *EventEngine) Bind(sourceTag string, router *Router) {
 	e.xlog().Infof("bind router: OK, source.tag: %s", sourceTag)
 }
 
-func (e *EventEngine) onRouterWorkFunc(router *Router, ctx StateContext, record Event) error {
-	defer func() {
-		if err := recover(); err != nil {
-			e.xlog().Errorf("on route event, unexcepted panic: %s, event.tag: %s, event.type: %s", err, record.Tag(), record.Header().Kind.String())
-		}
-	}()
-	router.route(ctx, record)
-	return nil
-}
-
-func (e *EventEngine) doAsyncEmitFunc(router *Router, ctx StateContext, event Event) {
+func (e *EventEngine) doEmitFunc(router *Router, ctx StateContext, event Event) {
 	if ctx.State().Is(StateAsync) {
-		_ = e.onRouterWorkFunc(router, ctx, event)
+		_ = e.onEmitRouter(router, ctx, event)
 	} else {
 		e.coroutines.Process([]interface{}{router, ctx, event})
 	}
+}
+
+func (e *EventEngine) onEmitRouter(router *Router, ctx StateContext, event Event) error {
+	defer func() {
+		if err := recover(); err != nil {
+			e.xlog().Errorf("on route work, unexcepted panic: %s, event.tag: %s, event.type: %s", err, event.Tag(), event.Header().Kind.String())
+		}
+	}()
+	router.route(ctx, event)
+	return nil
 }
 
 func (e *EventEngine) statechk() error {
@@ -159,24 +159,24 @@ func (e *EventEngine) compile(groups []GroupDescriptor) {
 			verify(rw.FilterTags, "router, 'filter-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
 			verify(rw.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
 			verify(rw.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
-			nr := NewRouterOf(e.doAsyncEmitFunc)
+			nr := NewRouterOf(e.doEmitFunc)
 			Log().Infof("bind router, src.tag: %s, route: %+v", rw.SourceTag, rw)
 			e.Bind(rw.SourceTag, e.lookup(nr, rw))
 		}
 	}
 }
 
-func (e *EventEngine) lookup(router *Router, rw router) *Router {
+func (e *EventEngine) lookup(router *Router, mr router) *Router {
 	// filters
-	TagMatcher(rw.FilterTags).match(e._filters, func(v interface{}) {
+	TagMatcher(mr.FilterTags).match(e._filters, func(v interface{}) {
 		router.AddFilter(v.(Filter))
 	})
 	// transformer
-	TagMatcher(rw.TransformerTags).match(e._transformers, func(v interface{}) {
+	TagMatcher(mr.TransformerTags).match(e._transformers, func(v interface{}) {
 		router.AddTransformer(v.(Transformer))
 	})
 	// output
-	TagMatcher(rw.OutputTags).match(e._outputs, func(v interface{}) {
+	TagMatcher(mr.OutputTags).match(e._outputs, func(v interface{}) {
 		router.AddOutput(v.(Output))
 	})
 	return router
