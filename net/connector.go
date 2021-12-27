@@ -2,6 +2,7 @@ package ext
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	flow "github.com/bytepowered/flow/v2/pkg"
 	"github.com/bytepowered/runv"
@@ -158,7 +159,10 @@ func (nc *Connector) Serve() {
 			if err := nc.conn.SetReadDeadline(time.Now().Add(nc.config.ReadTimeout)); err != nil {
 				retry(fmt.Errorf("connection set read options: %w", err))
 			} else if err = nc.onRecvFunc(nc.conn); err != nil {
-				if ne, ok := err.(net.Error); ok && (ne.Temporary() || ne.Timeout()) {
+				if werr := errors.Unwrap(err); werr != nil {
+					err = werr
+				}
+				if nerr, ok := err.(net.Error); ok && (nerr.Temporary() || nerr.Timeout()) {
 					time.Sleep(nc.inc(delay, time.Millisecond*5, time.Millisecond*100))
 				} else if err != nil {
 					retry(fmt.Errorf("connection recv: %w", err))
