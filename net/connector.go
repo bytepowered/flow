@@ -47,7 +47,7 @@ type Connector struct {
 	onOpenFunc  OnOpenFunc
 	onCloseFunc OnCloseFunc
 	onRecvFunc  OnRecvFunc
-	onTestErr   OnErrorFunc
+	onErrFunc   OnErrorFunc
 	onDialFunc  OnDialFunc
 	config      Config
 	downctx     context.Context
@@ -93,13 +93,13 @@ func (nc *Connector) SetRecvFunc(f OnRecvFunc) *Connector {
 }
 
 func (nc *Connector) OnErrorFunc(f OnErrorFunc) *Connector {
-	nc.onTestErr = f
+	nc.onErrFunc = f
 	return nc
 }
 
 func (nc *Connector) Serve() {
 	runv.AssertNNil(nc.onDialFunc, "'onDialFunc' is required")
-	runv.AssertNNil(nc.onTestErr, "'onTestErr' is required")
+	runv.AssertNNil(nc.onErrFunc, "'onErrFunc' is required")
 	runv.AssertNNil(nc.onDialFunc, "'onDialFunc' is required")
 	runv.AssertNNil(nc.onOpenFunc, "'onOpenFunc' is required")
 	runv.AssertNNil(nc.onCloseFunc, "'onCloseFunc' is required")
@@ -112,7 +112,7 @@ func (nc *Connector) Serve() {
 		count = 0
 		delay = time.Millisecond * 5
 	}
-	retry := func(err error) {
+	checke := func(err error) {
 		select {
 		case <-nc.downctx.Done():
 			nc.state0(kStateClosed)
@@ -120,10 +120,12 @@ func (nc *Connector) Serve() {
 		default:
 			// next
 		}
-		// test errors
-		if !nc.onTestErr(nc, err) {
-			nc.state0(kStateClosed)
-		} else if nc.config.RetryMax > 0 && count >= nc.config.RetryMax {
+		// Skip by test func
+		if nc.onErrFunc(nc, err) {
+			return
+		}
+		// retry
+		if nc.config.RetryMax > 0 && count >= nc.config.RetryMax {
 			nc.state0(kStateClosed)
 		} else {
 			count++
@@ -147,9 +149,9 @@ func (nc *Connector) Serve() {
 		case kStateReconnect:
 			flow.Log().Infof("re-connecting to: %s, retry: %d", addr, count)
 			if conn, err := nc.onDialFunc(nc.config); err != nil {
-				retry(fmt.Errorf("connection dial: %w", err))
+				checke(fmt.Errorf("connection dial: %w", err))
 			} else if err = nc.onOpenFunc(conn, nc.config); err != nil {
-				retry(fmt.Errorf("connection open: %w", err))
+				checke(fmt.Errorf("connection open: %w", err))
 			} else {
 				reset(conn)
 				nc.state0(kStateConnected)
@@ -157,7 +159,7 @@ func (nc *Connector) Serve() {
 			}
 		case kStateConnected:
 			if err := nc.conn.SetReadDeadline(time.Now().Add(nc.config.ReadTimeout)); err != nil {
-				retry(fmt.Errorf("connection set read options: %w", err))
+				checke(fmt.Errorf("connection set read options: %w", err))
 			} else if err = nc.onRecvFunc(nc.conn); err != nil {
 				if werr := errors.Unwrap(err); werr != nil {
 					err = werr
@@ -165,7 +167,7 @@ func (nc *Connector) Serve() {
 				if nerr, ok := err.(net.Error); ok && (nerr.Temporary() || nerr.Timeout()) {
 					time.Sleep(nc.inc(delay, time.Millisecond*5, time.Millisecond*100))
 				} else if err != nil {
-					retry(fmt.Errorf("connection recv: %w", err))
+					checke(fmt.Errorf("connection recv: %w", err))
 				}
 			}
 		}
@@ -197,7 +199,7 @@ func (nc *Connector) close0() {
 	}
 	defer nc.onCloseFunc(nc.conn)
 	if err := nc.conn.Close(); err != nil && !strings.Contains(err.Error(), "closed network connection") {
-		nc.onTestErr(nc, fmt.Errorf("connection close: %w", err))
+		nc.onErrFunc(nc, fmt.Errorf("connection close: %w", err))
 	}
 }
 
@@ -227,7 +229,7 @@ func WithRecvFunc(f OnRecvFunc) ConnectorOptions {
 
 func WithErrorFunc(f OnErrorFunc) ConnectorOptions {
 	return func(c *Connector) {
-		c.onTestErr = f
+		c.onErrFunc = f
 	}
 }
 
