@@ -6,13 +6,13 @@ import (
 
 var (
 	_ runv.Liveorder = OrderedPlugin{}
-	_ runv.Liveorder = OrderedSource{}
+	_ runv.Liveorder = OrderedInput{}
 	_ runv.Liveorder = OrderedOutput{}
 )
 
 const (
 	BaseOrderPlugin = 1000
-	BaseOrderSource = 1000
+	BaseOrderInput  = 1000
 	BaseOrderOutput = 100
 )
 
@@ -30,15 +30,15 @@ func (OrderedPlugin) Order(state runv.State) int {
 	}
 }
 
-// OrderedSource Source生命周期顺序，启动排后，关闭优先
-type OrderedSource struct{}
+// OrderedInput Input生命周期顺序，启动排后，关闭优先
+type OrderedInput struct{}
 
-func (OrderedSource) Order(state runv.State) int {
+func (OrderedInput) Order(state runv.State) int {
 	switch state {
 	case runv.StateShutdown:
-		return -1 * BaseOrderSource
+		return -1 * BaseOrderInput
 	case runv.StateStartup:
-		return BaseOrderSource
+		return BaseOrderInput
 	default:
 		return 0
 	}

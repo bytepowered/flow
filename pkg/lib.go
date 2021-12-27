@@ -55,11 +55,6 @@ const (
 	//StateXX    State = 0x00000008
 )
 
-type Plugin interface {
-	// Tag 返回标识实现对象的标签
-	Tag() string
-}
-
 // StateContext 发生Event的上下文
 type StateContext interface {
 	// Context 返回Context
@@ -74,10 +69,9 @@ type StateContext interface {
 	State() State
 }
 
-// Emitter Event发送接口，用于Source在外部实现消息投递逻辑。
-// 当 Source 触发事件时，使用 Emitter 发送事件。
-type Emitter interface {
-	Emit(StateContext, Event)
+type Plugin interface {
+	// Tag 返回标识实现对象的标签
+	Tag() string
 }
 
 // Formatter Event格式处理，用于将字节流转换为事件对象。
@@ -86,8 +80,14 @@ type Formatter interface {
 	DoFormat(ctx context.Context, srctag string, data []byte) (Event, error)
 }
 
-// Source 数据源适配接口。
-type Source interface {
+// Emitter Event发送接口，用于Input在外部实现消息投递逻辑。
+// 当 Input 触发事件时，使用 Emitter 发送事件。
+type Emitter interface {
+	Emit(StateContext, Event)
+}
+
+// Input 数据源适配接口。
+type Input interface {
 	Plugin
 	runv.Liveness
 	AddEmitter(emitter Emitter)

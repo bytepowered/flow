@@ -18,7 +18,7 @@ type EventEngineOption func(*EventEngine)
 
 type EventEngine struct {
 	coroutines    *tunny.Pool
-	_sources      []Source
+	_inputs       []Input
 	_filters      []Filter
 	_transformers []Transformer
 	_outputs      []Output
@@ -43,7 +43,7 @@ func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 
 func (e *EventEngine) OnInit() error {
 	e.xlog().Infof("init")
-	runv.Assert(0 < len(e._sources), "engine.sources is required")
+	runv.Assert(0 < len(e._inputs), "engine.inputs is required")
 	runv.Assert(0 < len(e._outputs), "engine.outputs is required")
 	groups := make([]GroupDescriptor, 0)
 	if err := UnmarshalKey("router", &groups); err != nil {
@@ -65,26 +65,26 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (e *EventEngine) Bind(sourceTag string, router *Router) {
-	// find source
-	source, ok := func(tag string) (Source, bool) {
-		for _, s := range e._sources {
+func (e *EventEngine) Bind(inputTag string, router *Router) {
+	// find input
+	input, ok := func(tag string) (Input, bool) {
+		for _, s := range e._inputs {
 			if tag == s.Tag() {
 				return s, true
 			}
 		}
 		return nil, false
-	}(sourceTag)
-	runv.Assert(ok, "bind router: source is required, source.tag: "+sourceTag)
-	runv.Assert(len(router.outputs) > 0, "bind router: outputs is required, source.tag: "+sourceTag)
+	}(inputTag)
+	runv.Assert(ok, "bind router: input is required, input.tag: "+inputTag)
+	runv.Assert(len(router.outputs) > 0, "bind router: outputs is required, input.tag: "+inputTag)
 	// bind async emit func
 	if router.emitter == nil {
 		router.emitter = e.doEmitFunc
 	}
-	// bind source
-	source.AddEmitter(router)
+	// bind input
+	input.AddEmitter(router)
 	e._routers = append(e._routers, router)
-	e.xlog().Infof("bind router: OK, source.tag: %s", sourceTag)
+	e.xlog().Infof("bind router: OK, input.tag: %s", inputTag)
 }
 
 func (e *EventEngine) doEmitFunc(router *Router, ctx StateContext, event Event) {
@@ -110,11 +110,11 @@ func (e *EventEngine) statechk() error {
 	return nil
 }
 
-func (e *EventEngine) SetSources(v []Source) {
-	e._sources = v
+func (e *EventEngine) SetInputs(v []Input) {
+	e._inputs = v
 }
 
-func (e *EventEngine) SetOutput(v []Output) {
+func (e *EventEngine) SetOutputs(v []Output) {
 	e._outputs = v
 }
 
@@ -131,11 +131,11 @@ func (e *EventEngine) Order(state runv.State) int {
 }
 
 func (e *EventEngine) flat(group GroupDescriptor) []router {
-	routers := make([]router, 0, len(e._sources))
-	TagMatcher(group.Selector.SourceTags).match(e._sources, func(v interface{}) {
+	routers := make([]router, 0, len(e._inputs))
+	TagMatcher(group.Selector.InputTags).match(e._inputs, func(v interface{}) {
 		routers = append(routers, router{
 			description:     group.Description,
-			SourceTag:       v.(Source).Tag(),
+			InputTag:        v.(Input).Tag(),
 			FilterTags:      group.Selector.FilterTags,
 			TransformerTags: group.Selector.TransformerTags,
 			OutputTags:      group.Selector.OutputTags,
@@ -147,7 +147,7 @@ func (e *EventEngine) flat(group GroupDescriptor) []router {
 func (e *EventEngine) compile(groups []GroupDescriptor) {
 	for _, group := range groups {
 		runv.Assert(group.Description != "", "router group, 'description' is required")
-		runv.Assert(len(group.Selector.SourceTags) > 0, "router group, selector 'source-tags' is required")
+		runv.Assert(len(group.Selector.InputTags) > 0, "router group, selector 'input-tags' is required")
 		runv.Assert(len(group.Selector.OutputTags) > 0, "router group, selector 'output-tags' is required")
 		verify := func(tags []string, msg, src string) {
 			for _, t := range tags {
@@ -155,13 +155,13 @@ func (e *EventEngine) compile(groups []GroupDescriptor) {
 			}
 		}
 		for _, rw := range e.flat(group) {
-			runv.Assert(len(rw.SourceTag) >= 3, "router, 'source-tag' is invalid, tag: "+rw.SourceTag+", group: "+group.Description)
-			verify(rw.FilterTags, "router, 'filter-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
-			verify(rw.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
-			verify(rw.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", rw.SourceTag)
+			runv.Assert(len(rw.InputTag) >= 3, "router, 'input-tag' is invalid, tag: "+rw.InputTag+", group: "+group.Description)
+			verify(rw.FilterTags, "router, 'filter-tag' is invalid, tag: %s, src: %s", rw.InputTag)
+			verify(rw.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", rw.InputTag)
+			verify(rw.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", rw.InputTag)
 			nr := NewRouterOf(e.doEmitFunc)
-			Log().Infof("bind router, src.tag: %s, route: %+v", rw.SourceTag, rw)
-			e.Bind(rw.SourceTag, e.lookup(nr, rw))
+			Log().Infof("bind router, src.tag: %s, route: %+v", rw.InputTag, rw)
+			e.Bind(rw.InputTag, e.lookup(nr, rw))
 		}
 	}
 }
