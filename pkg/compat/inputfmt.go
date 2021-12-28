@@ -32,6 +32,9 @@ func (i *FormatInput) EmitFrame(ctx flow.StateContext, data []byte) error {
 	if err != nil {
 		return err
 	}
-	i.Emit(ctx, evt)
+	// skip nil events
+	if evt != nil {
+		i.Emit(ctx, evt)
+	}
 	return nil
 }

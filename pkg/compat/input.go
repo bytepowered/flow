@@ -60,6 +60,8 @@ func (i *Input) SetTag(tag string) {
 }
 
 func (i *Input) Emit(ctx flow.StateContext, event flow.Event) {
+	runv.Assert(ctx != nil, "input.emit.ctx is requires non-null")
+	runv.Assert(event != nil, "input.emit.event is requires non-null")
 	for _, emitter := range i.emitters {
 		emitter.Emit(ctx, event)
 	}

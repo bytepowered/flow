@@ -96,11 +96,11 @@ func (e *EventEngine) doEmitFunc(router *Router, ctx StateContext, event Event) 
 }
 
 func (e *EventEngine) onEmitRouter(router *Router, ctx StateContext, event Event) error {
-	defer func() {
-		if err := recover(); err != nil {
-			e.xlog().Errorf("on route work, unexcepted panic: %s, event.tag: %s, event.type: %s", err, event.Tag(), event.Header().Kind.String())
+	defer func(tag, kind string) {
+		if r := recover(); r != nil {
+			e.xlog().Errorf("on route work, unexcepted panic: %s, event.tag: %s, event.type: %s", r, tag, kind)
 		}
-	}()
+	}(event.Tag(), event.Kind().String())
 	router.route(ctx, event)
 	return nil
 }
