@@ -161,13 +161,14 @@ func (nc *Connector) Serve() {
 			if err := nc.conn.SetReadDeadline(time.Now().Add(nc.config.ReadTimeout)); err != nil {
 				checke(fmt.Errorf("connection set read options: %w", err))
 			} else if err = nc.onRecvFunc(nc.conn); err != nil {
+				var terr = err
 				if werr := errors.Unwrap(err); werr != nil {
-					err = werr
+					terr = werr
 				}
-				if nerr, ok := err.(net.Error); ok && (nerr.Temporary() || nerr.Timeout()) {
+				if nerr, ok := terr.(net.Error); ok && (nerr.Temporary() || nerr.Timeout()) {
 					time.Sleep(nc.inc(delay, time.Millisecond*5, time.Millisecond*100))
-				} else if err != nil {
-					checke(fmt.Errorf("connection recv: %w", err))
+				} else {
+					checke(err)
 				}
 			}
 		}
