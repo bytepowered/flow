@@ -198,7 +198,7 @@ func (nc *Connector) Close() {
 }
 
 func (nc *Connector) setState(s ConnState) {
-	if s == ConnStateDisconnecting {
+	if s == ConnStateDisconnecting && nc.conn != nil {
 		_ = nc.conn.SetDeadline(time.Time{})
 	}
 	nc.state = s
