@@ -46,7 +46,7 @@ func (e *EventEngine) OnInit() error {
 	runv.Assert(0 < len(e._inputs), "engine.inputs is required")
 	runv.Assert(0 < len(e._outputs), "engine.outputs is required")
 	groups := make([]GroupDescriptor, 0)
-	if err := UnmarshalKey("router", &groups); err != nil {
+	if err := UnmarshalConfigKey("router", &groups); err != nil {
 		return fmt.Errorf("load 'routers' config error: %w", err)
 	}
 	e.compile(groups)
