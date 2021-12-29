@@ -6,6 +6,7 @@ import (
 	"fmt"
 	flow "github.com/bytepowered/flow/v2/pkg"
 	"github.com/bytepowered/runv"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -19,12 +20,13 @@ type (
 	OnErrorFunc func(conn *Connector, err error) (continued bool)
 )
 
-type kState uint
+type ConnState uint
 
 const (
-	kStateReconnect kState = iota
-	kStateConnected
-	kStateClosed
+	ConnStateConnecting ConnState = iota
+	ConnStateConnected
+	ConnStateDisconnecting
+	ConnStateDisconnected
 )
 
 type Config struct {
@@ -53,7 +55,7 @@ type Connector struct {
 	downctx     context.Context
 	downfun     context.CancelFunc
 	conn        net.Conn
-	state       kState
+	state       ConnState
 }
 
 func NewConnector(config Config, opts ...ConnectorOptions) *Connector {
@@ -97,6 +99,10 @@ func (nc *Connector) OnErrorFunc(f OnErrorFunc) *Connector {
 	return nc
 }
 
+func (nc *Connector) State() ConnState {
+	return nc.state
+}
+
 func (nc *Connector) Serve() {
 	runv.AssertNNil(nc.onDialFunc, "'onDialFunc' is required")
 	runv.AssertNNil(nc.onErrFunc, "'onErrFunc' is required")
@@ -112,30 +118,34 @@ func (nc *Connector) Serve() {
 		count = 0
 		delay = time.Millisecond * 5
 	}
+	retry := func() {
+		if nc.config.RetryMax > 0 && count >= nc.config.RetryMax {
+			nc.setState(ConnStateDisconnecting)
+		} else {
+			count++
+			nc.setState(ConnStateConnecting)
+			time.Sleep(nc.config.RetryDelay)
+		}
+	}
 	checke := func(err error) {
 		select {
 		case <-nc.downctx.Done():
-			nc.state0(kStateClosed)
+			nc.setState(ConnStateDisconnecting)
 			return
 		default:
 			// next
 		}
-		// Skip by test func
-		if nc.onErrFunc(nc, err) {
+		if errors.Is(err, io.EOF) {
+			retry()
+		} else if nc.onErrFunc(nc, err) {
 			return
-		}
-		// retry
-		if nc.config.RetryMax > 0 && count >= nc.config.RetryMax {
-			nc.state0(kStateClosed)
 		} else {
-			count++
-			time.Sleep(nc.config.RetryDelay)
-			nc.state0(kStateReconnect)
+			retry()
 		}
 	}
 	addr := fmt.Sprintf("%s://%s", nc.config.Network, nc.config.RemoteAddress)
 	defer nc.Close()
-	nc.state0(kStateReconnect)
+	nc.setState(ConnStateConnecting)
 	for {
 		select {
 		case <-nc.Done():
@@ -144,9 +154,9 @@ func (nc *Connector) Serve() {
 			// next
 		}
 		switch nc.state {
-		case kStateClosed:
+		case ConnStateDisconnecting:
 			return
-		case kStateReconnect:
+		case ConnStateConnecting:
 			flow.Log().Infof("re-connecting to: %s, retry: %d", addr, count)
 			if conn, err := nc.onDialFunc(nc.config); err != nil {
 				checke(fmt.Errorf("connection dial: %w", err))
@@ -154,10 +164,10 @@ func (nc *Connector) Serve() {
 				checke(fmt.Errorf("connection open: %w", err))
 			} else {
 				reset(conn)
-				nc.state0(kStateConnected)
+				nc.setState(ConnStateConnected)
 				flow.Log().Infof("connected: %s OK", addr)
 			}
-		case kStateConnected:
+		case ConnStateConnected:
 			if err := nc.conn.SetReadDeadline(time.Now().Add(nc.config.ReadTimeout)); err != nil {
 				checke(fmt.Errorf("connection set read options: %w", err))
 			} else if err = nc.onRecvFunc(nc.conn); err != nil {
@@ -187,14 +197,15 @@ func (nc *Connector) Close() {
 	nc.close0()
 }
 
-func (nc *Connector) state0(s kState) {
-	if s == kStateClosed {
+func (nc *Connector) setState(s ConnState) {
+	if s == ConnStateDisconnecting {
 		_ = nc.conn.SetDeadline(time.Time{})
 	}
 	nc.state = s
 }
 
 func (nc *Connector) close0() {
+	defer nc.setState(ConnStateDisconnected)
 	if nc.conn == nil {
 		return
 	}
