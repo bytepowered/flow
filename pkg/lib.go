@@ -2,7 +2,6 @@ package flow
 
 import (
 	"context"
-	"github.com/bytepowered/runv"
 	"time"
 )
 
@@ -89,7 +88,6 @@ type Emitter interface {
 // Input 数据源适配接口。
 type Input interface {
 	Plugin
-	runv.Liveness
 	AddEmitter(emitter Emitter)
 	Emit(ctx StateContext, event Event)
 }
