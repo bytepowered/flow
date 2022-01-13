@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Jeffail/tunny"
 	"github.com/bytepowered/runv"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
 
@@ -29,7 +30,7 @@ func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 	engine := &EventEngine{}
 	engine.coroutines = tunny.NewFunc(1000, func(i interface{}) interface{} {
 		vals := i.([]interface{})
-		return engine.onEmitRouter(
+		return engine.doEmitEvent(
 			vals[0].(*Router),
 			vals[1].(StateContext),
 			vals[2].(Event))
@@ -65,8 +66,8 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (e *EventEngine) Bind(inputTag string, router *Router) {
-	// find input
+func (e *EventEngine) AddRouter(inputTag string, router *Router) {
+	// find input by tag
 	input, ok := func(tag string) (Input, bool) {
 		for _, s := range e._inputs {
 			if tag == s.Tag() {
@@ -75,34 +76,61 @@ func (e *EventEngine) Bind(inputTag string, router *Router) {
 		}
 		return nil, false
 	}(inputTag)
-	runv.Assert(ok, "bind router: input is required, input.tag: "+inputTag)
-	runv.Assert(len(router.outputs) > 0, "bind router: outputs is required, input.tag: "+inputTag)
-	// bind async emit func
-	if router.emitter == nil {
-		router.emitter = e.doEmitFunc
-	}
+	runv.Assert(ok, "add router: input is required, input.tag: "+inputTag)
+	runv.Assert(len(router.outputs) > 0, "add router: outputs is required, input.tag: "+inputTag)
 	// bind input
+	router.setEmitFunc(e.doEmitFunc)
 	input.AddEmitter(router)
 	e._routers = append(e._routers, router)
-	e.xlog().Infof("bind router: OK, input.tag: %s", inputTag)
+	e.xlog().Infof("add router: OK, input.tag: %s", inputTag)
 }
 
-func (e *EventEngine) doEmitFunc(router *Router, ctx StateContext, event Event) {
+func (e *EventEngine) doEmitFunc(ctx StateContext, router *Router, event Event) {
 	if ctx.State().Is(StateAsync) {
-		_ = e.onEmitRouter(router, ctx, event)
+		_ = e.doEmitEvent(router, ctx, event)
 	} else {
 		e.coroutines.Process([]interface{}{router, ctx, event})
 	}
 }
 
-func (e *EventEngine) onEmitRouter(router *Router, ctx StateContext, event Event) error {
+func (e *EventEngine) doEmitEvent(router *Router, ctx StateContext, inevt Event) error {
 	defer func(tag, kind string) {
 		if r := recover(); r != nil {
 			e.xlog().Errorf("on route work, unexcepted panic: %s, event.tag: %s, event.type: %s", r, tag, kind)
 		}
-	}(event.Tag(), event.Kind().String())
-	router.route(ctx, event)
+	}(inevt.Tag(), inevt.Kind().String())
+	// filter -> transformer -> output
+	cm := metrics()
+	defer func(t *prometheus.Timer) {
+		t.ObserveDuration()
+	}(cm.NewTimer(inevt.Tag(), "emit"))
+	cm.NewCounter(inevt.Tag(), "received").Inc()
+	next := FilterFunc(func(ctx StateContext, event Event) (err error) {
+		for _, trans := range router.transformers {
+			event, err = trans.DoTransform(event)
+			if err != nil {
+				return fmt.Errorf("at transoform(:%s) error: %w", trans.Tag(), err)
+			}
+		}
+		for _, output := range router.outputs {
+			if err = output.Send(event); err != nil {
+				return fmt.Errorf("on output(%s) error: %w", output.Tag(), err)
+			}
+		}
+		return nil
+	})
+	if err := e.buildFilterChain(next, router.filters)(ctx, inevt); err != nil {
+		cm.NewCounter(inevt.Tag(), "error").Inc()
+		Log().Errorf("route(%s->) event, error: %s", inevt.Tag(), err)
+	}
 	return nil
+}
+
+func (e *EventEngine) buildFilterChain(next FilterFunc, filters []Filter) FilterFunc {
+	for i := len(filters) - 1; i >= 0; i-- {
+		next = filters[i].DoFilter(next)
+	}
+	return next
 }
 
 func (e *EventEngine) statechk() error {
@@ -159,9 +187,8 @@ func (e *EventEngine) compile(groups []GroupDescriptor) {
 			verify(rw.FilterTags, "router, 'filter-tag' is invalid, tag: %s, src: %s", rw.InputTag)
 			verify(rw.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", rw.InputTag)
 			verify(rw.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", rw.InputTag)
-			nr := NewRouterOf(e.doEmitFunc)
 			Log().Infof("bind router, src.tag: %s, route: %+v", rw.InputTag, rw)
-			e.Bind(rw.InputTag, e.lookup(nr, rw))
+			e.AddRouter(rw.InputTag, e.lookup(NewRouter(), rw))
 		}
 	}
 }
