@@ -46,12 +46,14 @@ func (e *EventEngine) OnInit() error {
 	e.xlog().Infof("init")
 	runv.Assert(0 < len(e._inputs), "engine.inputs is required")
 	runv.Assert(0 < len(e._outputs), "engine.outputs is required")
-	groups := make([]GroupDescriptor, 0)
-	if err := UnmarshalConfigKey("router", &groups); err != nil {
+	descriptors := make([]RouteDescriptor, 0)
+	if err := UnmarshalConfigKey("router", &descriptors); err != nil {
 		return fmt.Errorf("load 'routers' config error: %w", err)
 	}
-	e.compile(groups)
-	e.xlog().Infof("init load router groups: %d", len(groups))
+	for _, desc := range descriptors {
+		e.AddDescriptor(desc)
+	}
+	e.xlog().Infof("init load router descriptors: %d", len(descriptors))
 	return nil
 }
 
@@ -119,23 +121,18 @@ func (e *EventEngine) doEmitEvent(router *Router, ctx StateContext, inevt Event)
 		}
 		return nil
 	})
-	if err := e.buildFilterChain(next, router.filters)(ctx, inevt); err != nil {
+	if err := e.filterChain(next, router.filters)(ctx, inevt); err != nil {
 		cm.NewCounter(inevt.Tag(), "error").Inc()
 		Log().Errorf("route(%s->) event, error: %s", inevt.Tag(), err)
 	}
 	return nil
 }
 
-func (e *EventEngine) buildFilterChain(next FilterFunc, filters []Filter) FilterFunc {
+func (e *EventEngine) filterChain(next FilterFunc, filters []Filter) FilterFunc {
 	for i := len(filters) - 1; i >= 0; i-- {
 		next = filters[i].DoFilter(next)
 	}
 	return next
-}
-
-func (e *EventEngine) statechk() error {
-	runv.Assert(0 < len(e._routers), "engine routers is required")
-	return nil
 }
 
 func (e *EventEngine) SetInputs(v []Input) {
@@ -158,39 +155,37 @@ func (e *EventEngine) Order(state runv.State) int {
 	return 100000 // 所有生命周期都靠后
 }
 
-func (e *EventEngine) flat(group GroupDescriptor) []router {
+func (e *EventEngine) AddDescriptor(desc RouteDescriptor) {
+	runv.Assert(desc.Description != "", "router-descriptor, 'description' is required")
+	runv.Assert(len(desc.Selector.InputTags) > 0, "router-descriptor, selector 'input-tags' is required")
+	runv.Assert(len(desc.Selector.OutputTags) > 0, "router-descriptor, selector 'output-tags' is required")
+	verify := func(tags []string, msg, src string) {
+		for _, t := range tags {
+			runv.Assert(len(t) >= 3, msg, t, src)
+		}
+	}
+	for _, rw := range e.flat(desc) {
+		runv.Assert(len(rw.InputTag) >= 3, "router-descriptor, field 'input' is invalid, tag: "+rw.InputTag+", group: "+desc.Description)
+		verify(rw.FilterTags, "router-descriptor, field 'filters' is invalid, tag: %s, src: %s", rw.InputTag)
+		verify(rw.TransformerTags, "router-descriptor, field 'transformers' is invalid, tag: %s, src: %s", rw.InputTag)
+		verify(rw.OutputTags, "router-descriptor, field 'outputs' is invalid, tag: %s, src: %s", rw.InputTag)
+		Log().Infof("bind router, src.tag: %s, route: %+v", rw.InputTag, rw)
+		e.AddRouter(rw.InputTag, e.lookup(NewRouter(), rw))
+	}
+}
+
+func (e *EventEngine) flat(desc RouteDescriptor) []router {
 	routers := make([]router, 0, len(e._inputs))
-	TagMatcher(group.Selector.InputTags).match(e._inputs, func(v interface{}) {
+	TagMatcher(desc.Selector.InputTags).match(e._inputs, func(v interface{}) {
 		routers = append(routers, router{
-			description:     group.Description,
+			description:     desc.Description,
 			InputTag:        v.(Input).Tag(),
-			FilterTags:      group.Selector.FilterTags,
-			TransformerTags: group.Selector.TransformerTags,
-			OutputTags:      group.Selector.OutputTags,
+			FilterTags:      desc.Selector.FilterTags,
+			TransformerTags: desc.Selector.TransformerTags,
+			OutputTags:      desc.Selector.OutputTags,
 		})
 	})
 	return routers
-}
-
-func (e *EventEngine) compile(groups []GroupDescriptor) {
-	for _, group := range groups {
-		runv.Assert(group.Description != "", "router group, 'description' is required")
-		runv.Assert(len(group.Selector.InputTags) > 0, "router group, selector 'input-tags' is required")
-		runv.Assert(len(group.Selector.OutputTags) > 0, "router group, selector 'output-tags' is required")
-		verify := func(tags []string, msg, src string) {
-			for _, t := range tags {
-				runv.Assert(len(t) >= 3, msg, t, src)
-			}
-		}
-		for _, rw := range e.flat(group) {
-			runv.Assert(len(rw.InputTag) >= 3, "router, 'input-tag' is invalid, tag: "+rw.InputTag+", group: "+group.Description)
-			verify(rw.FilterTags, "router, 'filter-tag' is invalid, tag: %s, src: %s", rw.InputTag)
-			verify(rw.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", rw.InputTag)
-			verify(rw.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", rw.InputTag)
-			Log().Infof("bind router, src.tag: %s, route: %+v", rw.InputTag, rw)
-			e.AddRouter(rw.InputTag, e.lookup(NewRouter(), rw))
-		}
-	}
 }
 
 func (e *EventEngine) lookup(router *Router, mr router) *Router {
@@ -209,12 +204,23 @@ func (e *EventEngine) lookup(router *Router, mr router) *Router {
 	return router
 }
 
+func (e *EventEngine) statechk() error {
+	runv.Assert(0 < len(e._routers), "engine routers is required")
+	return nil
+}
+
 func (e *EventEngine) xlog() *logrus.Entry {
 	return Log().WithField("app", "engine")
 }
 
 func WithCoroutineSize(size uint) EventEngineOption {
-	return func(d *EventEngine) {
-		d.coroutines.SetSize(int(size))
+	return func(e *EventEngine) {
+		e.coroutines.SetSize(int(size))
+	}
+}
+
+func WithRouteDescriptor(desc RouteDescriptor) EventEngineOption {
+	return func(e *EventEngine) {
+		e.AddDescriptor(desc)
 	}
 }

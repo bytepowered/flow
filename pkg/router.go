@@ -2,7 +2,7 @@ package flow
 
 var _ Emitter = new(Router)
 
-type GroupDescriptor struct {
+type RouteDescriptor struct {
 	Description string `toml:"description"` // 路由分组描述
 	Selector    struct {
 		InputTags       []string `toml:"inputs"`       // 匹配Input的Tag Pattern
