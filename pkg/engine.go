@@ -116,11 +116,6 @@ func (e *EventEngine) route(stateCtx StateContext, router *Router, data Event) e
 	return fc(stateCtx, data)
 }
 
-func (e *EventEngine) statechk() error {
-	runv.Assert(0 < len(e._routers), "engine.routers is required")
-	return nil
-}
-
 func (e *EventEngine) SetInputs(v []Input) {
 	e._inputs = v
 }
@@ -168,6 +163,11 @@ func (e *EventEngine) compile(groups []GroupRouter) {
 			e._routers = append(e._routers, e.lookup(router, tr))
 		}
 	}
+}
+
+func (e *EventEngine) statechk() error {
+	runv.Assert(0 < len(e._routers), "engine.routers is required")
+	return nil
 }
 
 func (e *EventEngine) flat(group GroupRouter) []TaggedRouter {
