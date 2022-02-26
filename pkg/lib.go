@@ -69,14 +69,16 @@ type Plugin interface {
 	Tag() string
 }
 
+// Input 事件输入源
 type Input interface {
 	Plugin
-	OnReceive(ctx context.Context, queue chan<- Event)
+	OnRecv(ctx context.Context, queue chan<- Event)
 }
 
+// Output 事件输出源
 type Output interface {
 	Plugin
-	OnSend(ctx context.Context, event Event)
+	OnSend(ctx context.Context, events ...Event)
 }
 
 // FilterFunc 执行过滤原始Event的函数；
@@ -96,5 +98,5 @@ type Formatter interface {
 // Transformer 处理Event格式转换
 type Transformer interface {
 	Plugin
-	DoTransform(Event) (Event, error)
+	DoTransform(ctx StateContext, in []Event) (out []Event, err error)
 }

@@ -3,6 +3,7 @@ package compat
 import (
 	"context"
 	"fmt"
+	flow "github.com/bytepowered/flow/v3/pkg"
 	"time"
 )
 

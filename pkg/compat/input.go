@@ -54,6 +54,6 @@ func (i *Input) SetTag(tag string) {
 	i.tag = tag
 }
 
-func (i *Input) OnReceive(ctx context.Context, queue chan<- flow.Event) {
+func (i *Input) OnRecv(ctx context.Context, queue chan<- flow.Event) {
 	panic("not yet implemented")
 }

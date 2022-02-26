@@ -11,7 +11,7 @@ type GroupRouter struct {
 }
 
 type TaggedRouter struct {
-	description     string
+	Description     string
 	InputTag        string
 	FilterTags      []string
 	TransformerTags []string

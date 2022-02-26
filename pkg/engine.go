@@ -29,9 +29,9 @@ type EventEngine struct {
 }
 
 func NewEventEngine(opts ...EventEngineOption) *EventEngine {
-	cc, cf := context.WithCancel(context.Background())
+	ctx, ctxfunc := context.WithCancel(context.Background())
 	engine := &EventEngine{
-		stateContext: cc, stateFunc: cf,
+		stateContext: ctx, stateFunc: ctxfunc,
 		queueSize: 10,
 	}
 	for _, opt := range opts {
@@ -67,15 +67,14 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 }
 
 func (e *EventEngine) Serve() {
-	deliver := func(ctx context.Context, tag string, queue chan<- Event) {
+	doqueue := func(ctx context.Context, tag string, queue chan<- Event) {
 		e.xlog().Infof("deliver(%s): queue loop: start", tag)
 		defer e.xlog().Infof("deliver(%s): queue loop: stop", tag)
-		stateCtx := compat.NewStatedContext(ctx, StateAsync)
 		for evt := range queue {
-			for _, pipe := range e._routers {
-				err := e.deliver(stateCtx, pipe, evt)
-				if err != nil {
-					e.xlog().Errorf("router deliver error: %s", err)
+			stateCtx := compat.NewStatedContext(ctx, StateAsync)
+			for _, router := range e._routers {
+				if err := e.route(stateCtx, router, evt); err != nil {
+					e.xlog().Errorf("router.route error: %s", err)
 				}
 			}
 		}
@@ -90,30 +89,31 @@ func (e *EventEngine) Serve() {
 			defer wg.Done()
 			queue := make(chan Event, e.queueSize)
 			defer close(queue)
-			go deliver(e.stateContext, in.Tag(), queue)
+			go doqueue(e.stateContext, in.Tag(), queue)
 			e.xlog().Infof("start input, tag: %s", in.Tag())
-			in.OnReceive(e.stateContext, queue)
+			in.OnRecv(e.stateContext, queue)
 		}(input)
 	}
 	wg.Wait()
 }
 
-func (e *EventEngine) deliver(ctx StateContext, pipe *Router, event Event) error {
+func (e *EventEngine) route(stateCtx StateContext, router *Router, data Event) error {
 	next := FilterFunc(func(ctx StateContext, evt Event) (err error) {
 		// Transform
-		for _, tf := range pipe.transformers {
-			evt, err = tf.DoTransform(evt)
+		events := []Event{evt}
+		for _, tf := range router.transformers {
+			events, err = tf.DoTransform(ctx, events)
 			if err != nil {
 				return err
 			}
 		}
-		for _, output := range pipe.outputs {
-			output.OnSend(ctx.Context(), evt)
+		for _, output := range router.outputs {
+			output.OnSend(ctx.Context(), events...)
 		}
 		return nil
 	})
-	fc := e.makeFilterChain(next, pipe.filters)
-	return fc(ctx, event)
+	fc := e.makeFilterChain(next, router.filters)
+	return fc(stateCtx, data)
 }
 
 func (e *EventEngine) statechk() error {
@@ -159,12 +159,12 @@ func (e *EventEngine) compile(groups []GroupRouter) {
 			}
 		}
 		for _, tr := range e.flat(group) {
-			runv.Assert(len(tr.InputTag) >= 3, "router, 'input-tag' is invalid, tag: "+tr.InputTag+", group: "+group.Description)
+			runv.Assert(len(tr.InputTag) >= 3, "router, 'input-tag' is invalid, tag: "+tr.InputTag+", desc: "+group.Description)
 			verify(tr.FilterTags, "router, 'filter-tag' is invalid, tag: %s, src: %s", tr.InputTag)
 			verify(tr.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", tr.InputTag)
 			verify(tr.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", tr.InputTag)
-			Log().Infof("bind router, src.tag: %s, route: %+v", tr.InputTag, tr)
 			router := NewRouter()
+			Log().Infof("bind router, input.tag: %s, router: %+v", tr.InputTag, tr)
 			e._routers = append(e._routers, e.lookup(router, tr))
 		}
 	}
@@ -174,7 +174,7 @@ func (e *EventEngine) flat(group GroupRouter) []TaggedRouter {
 	routers := make([]TaggedRouter, 0, len(e._inputs))
 	TagMatcher(group.Selector.InputTags).match(e._inputs, func(v interface{}) {
 		routers = append(routers, TaggedRouter{
-			description:     group.Description,
+			Description:     group.Description,
 			InputTag:        v.(Input).Tag(),
 			FilterTags:      group.Selector.FilterTags,
 			TransformerTags: group.Selector.TransformerTags,
