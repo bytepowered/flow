@@ -5,15 +5,11 @@ import (
 	"time"
 )
 
-const (
-	TagGLOBAL = "@global"
-)
-
 // Kind 表示Event类型
 type Kind uint16
 
 func (e Kind) String() string {
-	return KindNameOf(e)
+	return GetKindNameOf(e)
 }
 
 // State 表示Event状态
@@ -73,23 +69,14 @@ type Plugin interface {
 	Tag() string
 }
 
-// Formatter Event格式处理，用于将字节流转换为事件对象。
-type Formatter interface {
-	OnInit(args interface{}) error
-	DoFormat(ctx context.Context, srctag string, data []byte) (Event, error)
-}
-
-// Emitter Event发送接口，用于Input在外部实现消息投递逻辑。
-// 当 Input 触发事件时，使用 Emitter 发送事件。
-type Emitter interface {
-	Emit(StateContext, Event)
-}
-
-// Input 数据源适配接口。
 type Input interface {
 	Plugin
-	AddEmitter(emitter Emitter)
-	Emit(ctx StateContext, event Event)
+	OnReceive(ctx context.Context, queue chan<- Event)
+}
+
+type Output interface {
+	Plugin
+	OnSend(ctx context.Context, event Event)
 }
 
 // FilterFunc 执行过滤原始Event的函数；
@@ -101,14 +88,13 @@ type Filter interface {
 	DoFilter(next FilterFunc) FilterFunc
 }
 
+// Formatter Event格式处理，用于将字节流转换为事件对象。
+type Formatter interface {
+	DoFormat(ctx context.Context, intag string, data []byte) (Event, error)
+}
+
 // Transformer 处理Event格式转换
 type Transformer interface {
 	Plugin
 	DoTransform(Event) (Event, error)
-}
-
-// Output Event输出接口
-type Output interface {
-	Plugin
-	Send(Event) error
 }

@@ -2,7 +2,7 @@ package compat
 
 import (
 	"context"
-	flow "github.com/bytepowered/flow/v2/pkg"
+	flow "github.com/bytepowered/flow/v3/pkg"
 	"github.com/bytepowered/runv"
 )
 
@@ -12,10 +12,10 @@ var _ flow.Input = new(Input)
 
 type Input struct {
 	OrderedInput
-	emitters []flow.Emitter
-	downfun  context.CancelFunc
-	downctx  context.Context
-	tag      string
+	downfun context.CancelFunc
+	downctx context.Context
+	tag     string
+	queue   chan<- flow.Event
 }
 
 func NewInput(tag string) *Input {
@@ -27,7 +27,6 @@ func NewInput(tag string) *Input {
 }
 
 func (i *Input) Startup(ctx context.Context) error {
-	runv.Assert(i.emitters != nil, "emitters is required")
 	if i.downctx == nil || i.downfun == nil {
 		i.downctx, i.downfun = context.WithCancel(ctx)
 	}
@@ -47,10 +46,6 @@ func (i *Input) Context() context.Context {
 	return i.downctx
 }
 
-func (i *Input) AddEmitter(e flow.Emitter) {
-	i.emitters = append(i.emitters, e)
-}
-
 func (i *Input) Tag() string {
 	return i.tag
 }
@@ -59,10 +54,6 @@ func (i *Input) SetTag(tag string) {
 	i.tag = tag
 }
 
-func (i *Input) Emit(ctx flow.StateContext, event flow.Event) {
-	runv.Assert(ctx != nil, "input.emit.ctx is requires non-null")
-	runv.Assert(event != nil, "input.emit.event is requires non-null")
-	for _, emitter := range i.emitters {
-		emitter.Emit(ctx, event)
-	}
+func (i *Input) OnReceive(ctx context.Context, queue chan<- flow.Event) {
+	panic("not yet implemented")
 }

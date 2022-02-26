@@ -7,14 +7,6 @@ import (
 )
 
 const (
-	ConfigRootInput       = "input"
-	ConfigRootFilter      = "filter"
-	ConfigRootTransformer = "transformer"
-	ConfigRootOutput      = "output"
-
-	ConfigKeyTypeId   = "type-id"
-	ConfigKeyDisabled = "disabled"
-
 	ConfigTagName = "toml"
 )
 

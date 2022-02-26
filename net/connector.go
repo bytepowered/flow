@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	flow "github.com/bytepowered/flow/v2/pkg"
+	flow "github.com/bytepowered/flow/v3/pkg"
 	"github.com/bytepowered/runv"
 	"io"
 	"net"
