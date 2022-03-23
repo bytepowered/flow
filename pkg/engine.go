@@ -66,7 +66,7 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 }
 
 func (e *EventEngine) Serve() {
-	doqueue := func(ctx context.Context, tag string, queue chan<- Event) {
+	doqueue := func(ctx context.Context, tag string, queue <-chan Event) {
 		e.xlog().Infof("deliver(%s): queue loop: start", tag)
 		defer e.xlog().Infof("deliver(%s): queue loop: stop", tag)
 		for evt := range queue {
