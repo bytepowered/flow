@@ -1,4 +1,4 @@
-package compat
+package extends
 
 import (
 	"github.com/bytepowered/runv"
