@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"github.com/bytepowered/runv"
 	"github.com/sirupsen/logrus"
-	"sync"
 )
 
 var (
 	_ runv.Initable  = new(EventEngine)
 	_ runv.Liveness  = new(EventEngine)
 	_ runv.Liveorder = new(EventEngine)
+	_ runv.Servable  = new(EventEngine)
 )
 
 type EventEngineOption func(*EventEngine)
@@ -65,10 +65,15 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (e *EventEngine) Serve() {
+func (e *EventEngine) Setup(ctx context.Context) runv.Context {
+	return runv.NewContextV(ctx, e.xlog().Logger, nil)
+}
+
+func (e *EventEngine) Serve(c runv.Context) error {
+	e.xlog().Infof("serve")
 	doqueue := func(ctx context.Context, tag string, queue <-chan Event) {
-		e.xlog().Infof("deliver(%s): queue loop: start", tag)
-		defer e.xlog().Infof("deliver(%s): queue loop: stop", tag)
+		c.Log().Infof("deliver(%s): queue loop: start", tag)
+		defer c.Log().Infof("deliver(%s): queue loop: stop", tag)
 		for evt := range queue {
 			stateCtx := NewStatefulContext(ctx, StateAsync)
 			for _, router := range e._routers {
@@ -79,21 +84,18 @@ func (e *EventEngine) Serve() {
 		}
 	}
 	// start inputs
-	wg := new(sync.WaitGroup)
-	e.xlog().Infof("start inputs, count: %d", len(e._inputs))
+	c.Log().Infof("start inputs, count: %d", len(e._inputs))
 	for _, input := range e._inputs {
-		wg.Add(1)
 		// 每个Input维护独立的Queue
 		go func(in Input) {
-			defer wg.Done()
 			queue := make(chan Event, e.queueSize)
 			defer close(queue)
 			go doqueue(e.stateContext, in.Tag(), queue)
-			e.xlog().Infof("start input, tag: %s", in.Tag())
+			c.Log().Infof("start input, tag: %s", in.Tag())
 			in.OnReceived(e.stateContext, queue)
 		}(input)
 	}
-	wg.Wait()
+	return nil
 }
 
 func (e *EventEngine) route(stateCtx StateContext, router *Router, data Event) error {
