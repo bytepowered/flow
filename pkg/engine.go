@@ -3,7 +3,6 @@ package flow
 import (
 	"context"
 	"fmt"
-	"github.com/bytepowered/flow/v3/pkg/compat"
 	"github.com/bytepowered/runv"
 	"github.com/sirupsen/logrus"
 	"sync"
@@ -71,7 +70,7 @@ func (e *EventEngine) Serve() {
 		e.xlog().Infof("deliver(%s): queue loop: start", tag)
 		defer e.xlog().Infof("deliver(%s): queue loop: stop", tag)
 		for evt := range queue {
-			stateCtx := compat.NewStatedContext(ctx, StateAsync)
+			stateCtx := NewStatefulContext(ctx, StateAsync)
 			for _, router := range e._routers {
 				if err := e.route(stateCtx, router, evt); err != nil {
 					e.xlog().Errorf("router.route error: %s", err)
@@ -91,7 +90,7 @@ func (e *EventEngine) Serve() {
 			defer close(queue)
 			go doqueue(e.stateContext, in.Tag(), queue)
 			e.xlog().Infof("start input, tag: %s", in.Tag())
-			in.OnRecv(e.stateContext, queue)
+			in.OnReceived(e.stateContext, queue)
 		}(input)
 	}
 	wg.Wait()

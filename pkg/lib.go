@@ -72,7 +72,7 @@ type Plugin interface {
 // Input 事件输入源
 type Input interface {
 	Plugin
-	OnRecv(ctx context.Context, queue chan<- Event)
+	OnReceived(ctx context.Context, queue chan<- Event)
 }
 
 // Output 事件输出源
