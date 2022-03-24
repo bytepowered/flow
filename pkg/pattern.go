@@ -6,10 +6,14 @@ import (
 	"strings"
 )
 
-type TagMatcher []string
+type TagPattern []string
 
-func (tm TagMatcher) match(components interface{}, on func(interface{})) {
-	vs := reflect.ValueOf(components)
+func TagPatternOf(in []string) TagPattern {
+	return TagPattern(in)
+}
+
+func (p TagPattern) Match(items interface{}, acceptor func(interface{})) {
+	vs := reflect.ValueOf(items)
 	runv.Assert(vs.Kind() == reflect.Slice, "'components' must be a slice")
 	for i := 0; i < vs.Len(); i++ {
 		elev := vs.Index(i)
@@ -17,9 +21,9 @@ func (tm TagMatcher) match(components interface{}, on func(interface{})) {
 		plg, ok := objv.(Plugin)
 		runv.Assert(ok, "'components' values must be typeof 'Plugin'")
 		tag := plg.Tag()
-		for _, pattern := range tm {
+		for _, pattern := range p {
 			if match0(pattern, tag) {
-				on(objv)
+				acceptor(objv)
 			}
 		}
 	}
@@ -27,6 +31,9 @@ func (tm TagMatcher) match(components interface{}, on func(interface{})) {
 
 func match0(pattern, tag string) bool {
 	psize, tsize := len(pattern), len(tag)
+	if psize == 1 && '*' == pattern[0] {
+		return true
+	}
 	if psize < 2 || tsize < 2 {
 		return false
 	}

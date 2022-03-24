@@ -65,15 +65,11 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (e *EventEngine) Setup(ctx context.Context) runv.Context {
-	return runv.NewContextV(ctx, e.xlog().Logger, nil)
-}
-
-func (e *EventEngine) Serve(c runv.Context) error {
+func (e *EventEngine) Serve(c context.Context) error {
 	e.xlog().Infof("serve")
 	doqueue := func(ctx context.Context, tag string, queue <-chan Event) {
-		c.Log().Infof("deliver(%s): queue loop: start", tag)
-		defer c.Log().Infof("deliver(%s): queue loop: stop", tag)
+		e.xlog().Infof("deliver(%s): queue loop: start", tag)
+		defer e.xlog().Infof("deliver(%s): queue loop: stop", tag)
 		for evt := range queue {
 			stateCtx := NewStatefulContext(ctx, StateAsync)
 			for _, router := range e._routers {
@@ -84,14 +80,14 @@ func (e *EventEngine) Serve(c runv.Context) error {
 		}
 	}
 	// start inputs
-	c.Log().Infof("start inputs, count: %d", len(e._inputs))
+	e.xlog().Infof("start inputs, count: %d", len(e._inputs))
 	for _, input := range e._inputs {
 		// 每个Input维护独立的Queue
 		go func(in Input) {
 			queue := make(chan Event, e.queueSize)
 			defer close(queue)
 			go doqueue(e.stateContext, in.Tag(), queue)
-			c.Log().Infof("start input, tag: %s", in.Tag())
+			e.xlog().Infof("start input, tag: %s", in.Tag())
 			in.OnReceived(e.stateContext, queue)
 		}(input)
 	}
@@ -173,7 +169,7 @@ func (e *EventEngine) statechk() error {
 
 func (e *EventEngine) flat(group GroupRouter) []TaggedRouter {
 	routers := make([]TaggedRouter, 0, len(e._inputs))
-	TagMatcher(group.Selector.InputTags).match(e._inputs, func(v interface{}) {
+	TagPatternOf(group.Selector.InputTags).Match(e._inputs, func(v interface{}) {
 		routers = append(routers, TaggedRouter{
 			Description:     group.Description,
 			InputTag:        v.(Input).Tag(),
@@ -187,15 +183,15 @@ func (e *EventEngine) flat(group GroupRouter) []TaggedRouter {
 
 func (e *EventEngine) lookup(router *Router, tags TaggedRouter) *Router {
 	// filters
-	TagMatcher(tags.FilterTags).match(e._filters, func(v interface{}) {
+	TagPattern(tags.FilterTags).Match(e._filters, func(v interface{}) {
 		router.AddFilter(v.(Filter))
 	})
 	// transformer
-	TagMatcher(tags.TransformerTags).match(e._transformers, func(v interface{}) {
+	TagPattern(tags.TransformerTags).Match(e._transformers, func(v interface{}) {
 		router.AddTransformer(v.(Transformer))
 	})
 	// output
-	TagMatcher(tags.OutputTags).match(e._outputs, func(v interface{}) {
+	TagPattern(tags.OutputTags).Match(e._outputs, func(v interface{}) {
 		router.AddOutput(v.(Output))
 	})
 	return router
