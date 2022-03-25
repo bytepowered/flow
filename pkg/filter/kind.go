@@ -3,6 +3,7 @@ package filter
 import (
 	flow "github.com/bytepowered/flow/v3/pkg"
 	"github.com/bytepowered/runv"
+	"github.com/bytepowered/runv/assert"
 )
 
 var _ flow.Filter = new(KindFilter)
@@ -31,7 +32,7 @@ func (h *KindFilter) Tag() string {
 }
 
 func (h *KindFilter) OnInit() error {
-	runv.Assert(len(h.config.Opts.Allowed)+len(h.config.Opts.Rejected) > 0, "allows/rejects is required")
+	assert.Must(len(h.config.Opts.Allowed)+len(h.config.Opts.Rejected) > 0, "allows/rejects is required")
 	return nil
 }
 

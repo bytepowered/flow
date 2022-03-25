@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/bytepowered/runv"
+	"github.com/bytepowered/runv/assert"
 	"github.com/sirupsen/logrus"
 )
 
@@ -42,8 +43,8 @@ func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 
 func (e *EventEngine) OnInit() error {
 	e.xlog().Infof("init")
-	runv.Assert(0 < len(e._inputs), "engine.inputs is required")
-	runv.Assert(0 < len(e._outputs), "engine.outputs is required")
+	assert.Must(0 < len(e._inputs), "engine.inputs is required")
+	assert.Must(0 < len(e._outputs), "engine.outputs is required")
 	// 从配置文件中加载route配置项
 	groups := make([]GroupRouter, 0)
 	if err := UnmarshalConfigKey("router", &groups); err != nil {
@@ -142,16 +143,16 @@ func (e *EventEngine) makeFilterChain(next FilterFunc, filters []Filter) FilterF
 
 func (e *EventEngine) compile(groups []GroupRouter) {
 	for _, group := range groups {
-		runv.Assert(group.Description != "", "router group, 'description' is required")
-		runv.Assert(len(group.Selector.InputTags) > 0, "router group, selector 'input-tags' is required")
-		runv.Assert(len(group.Selector.OutputTags) > 0, "router group, selector 'output-tags' is required")
+		assert.Must(group.Description != "", "router group, 'description' is required")
+		assert.Must(len(group.Selector.InputTags) > 0, "router group, selector 'input-tags' is required")
+		assert.Must(len(group.Selector.OutputTags) > 0, "router group, selector 'output-tags' is required")
 		verify := func(tags []string, msg, src string) {
 			for _, t := range tags {
-				runv.Assert(len(t) >= 3, msg, t, src)
+				assert.Must(len(t) >= 3, msg, t, src)
 			}
 		}
 		for _, tr := range e.flat(group) {
-			runv.Assert(len(tr.InputTag) >= 3, "router, 'input-tag' is invalid, tag: "+tr.InputTag+", desc: "+group.Description)
+			assert.Must(len(tr.InputTag) >= 3, "router, 'input-tag' is invalid, tag: "+tr.InputTag+", desc: "+group.Description)
 			verify(tr.FilterTags, "router, 'filter-tag' is invalid, tag: %s, src: %s", tr.InputTag)
 			verify(tr.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", tr.InputTag)
 			verify(tr.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", tr.InputTag)
@@ -163,7 +164,7 @@ func (e *EventEngine) compile(groups []GroupRouter) {
 }
 
 func (e *EventEngine) statechk() error {
-	runv.Assert(0 < len(e._routers), "engine.routers is required")
+	assert.Must(0 < len(e._routers), "engine.routers is required")
 	return nil
 }
 

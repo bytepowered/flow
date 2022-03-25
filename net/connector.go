@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	flow "github.com/bytepowered/flow/v3/pkg"
-	"github.com/bytepowered/runv"
+	"github.com/bytepowered/runv/assert"
 	"io"
 	"net"
 	"strings"
@@ -104,11 +104,11 @@ func (nc *Connector) State() ConnState {
 }
 
 func (nc *Connector) Serve() {
-	runv.AssertNNil(nc.onDialFunc, "'onDialFunc' is required")
-	runv.AssertNNil(nc.onErrFunc, "'onErrFunc' is required")
-	runv.AssertNNil(nc.onDialFunc, "'onDialFunc' is required")
-	runv.AssertNNil(nc.onOpenFunc, "'onOpenFunc' is required")
-	runv.AssertNNil(nc.onCloseFunc, "'onCloseFunc' is required")
+	assert.MustNotNil(nc.onDialFunc, "'onDialFunc' is required")
+	assert.MustNotNil(nc.onErrFunc, "'onErrFunc' is required")
+	assert.MustNotNil(nc.onDialFunc, "'onDialFunc' is required")
+	assert.MustNotNil(nc.onOpenFunc, "'onOpenFunc' is required")
+	assert.MustNotNil(nc.onCloseFunc, "'onCloseFunc' is required")
 	nc.config.ReadTimeout = nc.inc(nc.config.ReadTimeout, time.Second, time.Second*10)
 	nc.config.RetryDelay = nc.inc(nc.config.RetryDelay, time.Second, time.Second*5)
 	var count int
