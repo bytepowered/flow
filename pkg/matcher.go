@@ -6,22 +6,22 @@ import (
 	"strings"
 )
 
-type TagPattern []string
+type matcher []string
 
-func TagPatternOf(in []string) TagPattern {
-	return TagPattern(in)
+func newMatcher(patterns []string) matcher {
+	return patterns
 }
 
-func (p TagPattern) Match(items interface{}, acceptor func(interface{})) {
-	vs := reflect.ValueOf(items)
-	assert.Must(vs.Kind() == reflect.Slice, "'components' must be a slice")
+func (m matcher) on(plugins interface{}, acceptor func(interface{})) {
+	vs := reflect.ValueOf(plugins)
+	assert.Must(vs.Kind() == reflect.Slice, "'plugins' must be a slice")
 	for i := 0; i < vs.Len(); i++ {
 		elev := vs.Index(i)
 		objv := elev.Interface()
 		plg, ok := objv.(Plugin)
-		assert.Must(ok, "'components' values must be typeof 'Plugin'")
+		assert.Must(ok, "'plugins' values must be typeof 'Plugin'")
 		tag := plg.Tag()
-		for _, pattern := range p {
+		for _, pattern := range m {
 			if match0(pattern, tag) {
 				acceptor(objv)
 			}

@@ -8,8 +8,8 @@ import (
 // Kind 表示Event类型
 type Kind uint16
 
-func (e Kind) String() string {
-	return GetKindNameOf(e)
+func (k Kind) String() string {
+	return KindNameMapper.GetName(k)
 }
 
 // State 表示Event状态

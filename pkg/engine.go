@@ -170,7 +170,7 @@ func (e *EventEngine) statechk() error {
 
 func (e *EventEngine) flat(group GroupRouter) []TaggedRouter {
 	routers := make([]TaggedRouter, 0, len(e._inputs))
-	TagPatternOf(group.Selector.InputTags).Match(e._inputs, func(v interface{}) {
+	newMatcher(group.Selector.InputTags).on(e._inputs, func(v interface{}) {
 		routers = append(routers, TaggedRouter{
 			Description:     group.Description,
 			InputTag:        v.(Input).Tag(),
@@ -184,15 +184,15 @@ func (e *EventEngine) flat(group GroupRouter) []TaggedRouter {
 
 func (e *EventEngine) lookup(router *Router, tags TaggedRouter) *Router {
 	// filters
-	TagPattern(tags.FilterTags).Match(e._filters, func(v interface{}) {
+	newMatcher(tags.FilterTags).on(e._filters, func(v interface{}) {
 		router.AddFilter(v.(Filter))
 	})
 	// transformer
-	TagPattern(tags.TransformerTags).Match(e._transformers, func(v interface{}) {
+	newMatcher(tags.TransformerTags).on(e._transformers, func(v interface{}) {
 		router.AddTransformer(v.(Transformer))
 	})
 	// output
-	TagPattern(tags.OutputTags).Match(e._outputs, func(v interface{}) {
+	newMatcher(tags.OutputTags).on(e._outputs, func(v interface{}) {
 		router.AddOutput(v.(Output))
 	})
 	return router
