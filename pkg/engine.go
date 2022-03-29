@@ -110,7 +110,7 @@ func (e *EventEngine) route(stateCtx StateContext, router *Router, data Event) e
 		}
 		return nil
 	})
-	fc := e.makeFilterChain(next, router.filters)
+	fc := makeFilterChain(next, router.filters)
 	return fc(stateCtx, data)
 }
 
@@ -118,23 +118,39 @@ func (e *EventEngine) SetInputs(v []Input) {
 	e._inputs = v
 }
 
+func (e *EventEngine) AddInput(v Input) {
+	e._inputs = append(e._inputs, v)
+}
+
 func (e *EventEngine) SetOutputs(v []Output) {
 	e._outputs = v
+}
+
+func (e *EventEngine) AddOutput(v Output) {
+	e._outputs = append(e._outputs, v)
 }
 
 func (e *EventEngine) SetFilters(v []Filter) {
 	e._filters = v
 }
 
+func (e *EventEngine) AddFilter(v Filter) {
+	e._filters = append(e._filters, v)
+}
+
 func (e *EventEngine) SetTransformers(v []Transformer) {
 	e._transformers = v
+}
+
+func (e *EventEngine) AddTransformer(v Transformer) {
+	e._transformers = append(e._transformers, v)
 }
 
 func (e *EventEngine) Order(state runv.State) int {
 	return 10_0000 // 所有生命周期都靠后
 }
 
-func (e *EventEngine) makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
+func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
 	for i := len(filters) - 1; i >= 0; i-- {
 		next = filters[i].DoFilter(next)
 	}
