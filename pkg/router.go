@@ -1,6 +1,6 @@
 package flow
 
-type GroupRouter struct {
+type RouterGroupDefinition struct {
 	Description string `toml:"description"` // 路由分组描述
 	Selector    struct {
 		InputTags       []string `toml:"inputs"`       // 匹配Input的Tag Pattern
@@ -10,7 +10,7 @@ type GroupRouter struct {
 	} `toml:"selector"`
 }
 
-type TaggedRouter struct {
+type RouterDefinition struct {
 	Description     string
 	InputTag        string
 	FilterTags      []string
@@ -19,13 +19,15 @@ type TaggedRouter struct {
 }
 
 type Router struct {
+	Input        string
 	filters      []Filter
 	transformers []Transformer
 	outputs      []Output
 }
 
-func NewRouter() *Router {
+func NewRouter(tag string) *Router {
 	return &Router{
+		Input:        tag,
 		filters:      make([]Filter, 0, 4),
 		transformers: make([]Transformer, 0, 4),
 		outputs:      make([]Output, 0, 4),
