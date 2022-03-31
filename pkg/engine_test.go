@@ -52,6 +52,31 @@ func (n NopOutput) OnSend(ctx context.Context, events ...Event) {
 
 }
 
+var _ Transformer = new(NopTransformer)
+
+type NopTransformer int
+
+func (n NopTransformer) Tag() string {
+	return "transformer"
+}
+
+func (n NopTransformer) DoTransform(ctx StateContext, in []Event) (out []Event, err error) {
+	return in, nil
+}
+
+var _ Filter = new(NopFilter)
+
+type NopFilter int
+
+func (n NopFilter) Tag() string {
+	return "filter"
+}
+
+func (n NopFilter) DoFilter(next FilterFunc) FilterFunc {
+	fmt.Println("call nop filter")
+	return next
+}
+
 ////
 
 func TestMakeFilterChain(t *testing.T) {
@@ -63,6 +88,9 @@ func TestMakeFilterChain(t *testing.T) {
 	})
 	filters := make([]Filter, 0, count)
 	for i := 0; i < count; i++ {
+		if i == 2 {
+			filters = append(filters, new(NopFilter))
+		}
 		filters = append(filters, &IntFilter{
 			order: i,
 			list:  orders,
@@ -77,7 +105,7 @@ func TestMakeFilterChain(t *testing.T) {
 }
 
 func TestEngineInit(t *testing.T) {
-	eng := NewEventEngine(WithQueueSize(1))
+	eng := NewEventEngine(WithQueueSize(0))
 	assert.Panicsf(t, func() {
 		_ = eng.OnInit()
 	}, "must panic")
@@ -96,6 +124,8 @@ description = "desc"
 [router.selector]
 inputs = ["input"]
 outputs = ["output"]
+filters = ["filter"]
+transformers = ["transformer"]
 `
 	viper.SetConfigType("toml")
 	if err := viper.ReadConfig(bytes.NewReader([]byte(content))); err != nil {
@@ -103,11 +133,17 @@ outputs = ["output"]
 	}
 	in := new(NopInput)
 	out := new(NopOutput)
+	f := new(NopFilter)
+	tf := new(NopTransformer)
 	eng.AddInput(in)
 	eng.AddOutput(out)
+	eng.AddFilter(f)
+	eng.AddTransformer(tf)
 	assert.Nil(t, eng.OnInit())
 	rs := eng.GetRouters()
 	assert.Equal(t, 1, len(rs))
 	assert.Equal(t, in.Tag(), rs[0].Input)
 	assert.Equal(t, out, rs[0].outputs[0])
+	assert.Equal(t, f, rs[0].filters[0])
+	assert.Equal(t, tf, rs[0].transformers[0])
 }

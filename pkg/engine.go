@@ -125,7 +125,7 @@ func (e *EventEngine) SetInputs(v []Input) {
 }
 
 func (e *EventEngine) AddInput(v Input) {
-	e._inputs = append(e._inputs, v)
+	e.SetInputs(append(e._inputs, v))
 }
 
 func (e *EventEngine) SetOutputs(v []Output) {
@@ -133,7 +133,7 @@ func (e *EventEngine) SetOutputs(v []Output) {
 }
 
 func (e *EventEngine) AddOutput(v Output) {
-	e._outputs = append(e._outputs, v)
+	e.SetOutputs(append(e._outputs, v))
 }
 
 func (e *EventEngine) SetFilters(v []Filter) {
@@ -141,7 +141,7 @@ func (e *EventEngine) SetFilters(v []Filter) {
 }
 
 func (e *EventEngine) AddFilter(v Filter) {
-	e._filters = append(e._filters, v)
+	e.SetFilters(append(e._filters, v))
 }
 
 func (e *EventEngine) SetTransformers(v []Transformer) {
@@ -149,7 +149,7 @@ func (e *EventEngine) SetTransformers(v []Transformer) {
 }
 
 func (e *EventEngine) AddTransformer(v Transformer) {
-	e._transformers = append(e._transformers, v)
+	e.SetTransformers(append(e._transformers, v))
 }
 
 func (e *EventEngine) Order(state runv.State) int {
