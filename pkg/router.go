@@ -1,32 +1,32 @@
 package flow
 
-type RouterGroupDefinition struct {
+type RouteGroupDefinition struct {
 	Description string `toml:"description"` // 路由分组描述
 	Selector    struct {
-		InputTags       []string `toml:"inputs"`       // 匹配Input的Tag Pattern
+		Input           string   `toml:"input"`        // 匹配Input的Tag Pattern
 		FilterTags      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
 		TransformerTags []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
 		OutputTags      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
 	} `toml:"selector"`
 }
 
-type RouterDefinition struct {
-	Description     string
-	InputTag        string
-	FilterTags      []string
-	TransformerTags []string
-	OutputTags      []string
+type RouteMapper struct {
+	Description  string
+	Input        string
+	Filters      []string
+	Transformers []string
+	Outputs      []string
 }
 
-type Router struct {
+type RouteDescriptor struct {
 	Input        string
 	filters      []Filter
 	transformers []Transformer
 	outputs      []Output
 }
 
-func NewRouter(tag string) *Router {
-	return &Router{
+func NewRouter(tag string) *RouteDescriptor {
+	return &RouteDescriptor{
 		Input:        tag,
 		filters:      make([]Filter, 0, 4),
 		transformers: make([]Transformer, 0, 4),
@@ -34,14 +34,14 @@ func NewRouter(tag string) *Router {
 	}
 }
 
-func (r *Router) AddFilter(f Filter) {
+func (r *RouteDescriptor) AddFilter(f Filter) {
 	r.filters = append(r.filters, f)
 }
 
-func (r *Router) AddTransformer(t Transformer) {
+func (r *RouteDescriptor) AddTransformer(t Transformer) {
 	r.transformers = append(r.transformers, t)
 }
 
-func (r *Router) AddOutput(d Output) {
+func (r *RouteDescriptor) AddOutput(d Output) {
 	r.outputs = append(r.outputs, d)
 }

@@ -22,7 +22,7 @@ type EventEngine struct {
 	_filters      []Filter
 	_transformers []Transformer
 	_outputs      []Output
-	_routers      []*Router
+	_routers      []*RouteDescriptor
 	queueSize     uint
 	stateContext  context.Context
 	stateFunc     context.CancelFunc
@@ -46,7 +46,7 @@ func (e *EventEngine) OnInit() error {
 	assert.Must(0 < len(e._inputs), "engine.inputs is required")
 	assert.Must(0 < len(e._outputs), "engine.outputs is required")
 	// 从配置文件中加载route配置项
-	groups := make([]RouterGroupDefinition, 0)
+	groups := make([]RouteGroupDefinition, 0)
 	if err := UnmarshalConfigKey("router", &groups); err != nil {
 		return fmt.Errorf("load 'routers' config error: %w", err)
 	}
@@ -95,7 +95,7 @@ func (e *EventEngine) Serve(c context.Context) error {
 	return nil
 }
 
-func (e *EventEngine) route(stateCtx StateContext, router *Router, data Event) error {
+func (e *EventEngine) route(stateCtx StateContext, router *RouteDescriptor, data Event) error {
 	next := FilterFunc(func(ctx StateContext, evt Event) (err error) {
 		// Transform
 		events := []Event{evt}
@@ -114,8 +114,8 @@ func (e *EventEngine) route(stateCtx StateContext, router *Router, data Event) e
 	return fc(stateCtx, data)
 }
 
-func (e *EventEngine) GetRouters() []*Router {
-	copied := make([]*Router, len(e._routers))
+func (e *EventEngine) GetRouters() []*RouteDescriptor {
+	copied := make([]*RouteDescriptor, len(e._routers))
 	copy(copied, e._routers)
 	return copied
 }
@@ -163,10 +163,10 @@ func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
 	return next
 }
 
-func (e *EventEngine) compile(definitions []RouterGroupDefinition) {
+func (e *EventEngine) compile(definitions []RouteGroupDefinition) {
 	for _, group := range definitions {
 		assert.Must(group.Description != "", "router group, 'description' is required")
-		assert.Must(len(group.Selector.InputTags) > 0, "router group, selector 'input-tags' is required")
+		assert.Must(group.Selector.Input != "", "router group, selector 'input-tags' is required")
 		assert.Must(len(group.Selector.OutputTags) > 0, "router group, selector 'output-tags' is required")
 		verify := func(tags []string, msg, src string) {
 			for _, t := range tags {
@@ -174,12 +174,12 @@ func (e *EventEngine) compile(definitions []RouterGroupDefinition) {
 			}
 		}
 		for _, tr := range e.flat(group) {
-			assert.Must(len(tr.InputTag) > 0, "router, 'input-tag' is invalid, tag: "+tr.InputTag+", desc: "+group.Description)
-			verify(tr.FilterTags, "router, 'filter-tag' is invalid, tag: %s, src: %s", tr.InputTag)
-			verify(tr.TransformerTags, "router, 'transformer-tag' is invalid, tag: %s, src: %s", tr.InputTag)
-			verify(tr.OutputTags, "router, 'output-tag' is invalid, tag: %s, src: %s", tr.InputTag)
-			router := NewRouter(tr.InputTag)
-			Log().Infof("bind router, input.tag: %s, router: %+v", tr.InputTag, tr)
+			assert.Must(len(tr.Input) > 0, "router, 'input-tag' is invalid, tag: "+tr.Input+", desc: "+group.Description)
+			verify(tr.Filters, "router, 'filter-tag' is invalid, tag: %s, src: %s", tr.Input)
+			verify(tr.Transformers, "router, 'transformer-tag' is invalid, tag: %s, src: %s", tr.Input)
+			verify(tr.Outputs, "router, 'output-tag' is invalid, tag: %s, src: %s", tr.Input)
+			router := NewRouter(tr.Input)
+			Log().Infof("bind router, input.tag: %s, router: %+v", tr.Input, tr)
 			e._routers = append(e._routers, e.lookup(router, tr))
 		}
 	}
@@ -190,31 +190,31 @@ func (e *EventEngine) statechk() error {
 	return nil
 }
 
-func (e *EventEngine) flat(definition RouterGroupDefinition) []RouterDefinition {
-	routers := make([]RouterDefinition, 0, len(e._inputs))
-	newMatcher(definition.Selector.InputTags).on(e._inputs, func(v interface{}) {
-		routers = append(routers, RouterDefinition{
-			Description:     definition.Description,
-			InputTag:        v.(Input).Tag(),
-			FilterTags:      definition.Selector.FilterTags,
-			TransformerTags: definition.Selector.TransformerTags,
-			OutputTags:      definition.Selector.OutputTags,
+func (e *EventEngine) flat(definition RouteGroupDefinition) []RouteMapper {
+	routers := make([]RouteMapper, 0, len(e._inputs))
+	newMatcher([]string{definition.Selector.Input}).on(e._inputs, func(v interface{}) {
+		routers = append(routers, RouteMapper{
+			Description:  definition.Description,
+			Input:        v.(Input).Tag(),
+			Filters:      definition.Selector.FilterTags,
+			Transformers: definition.Selector.TransformerTags,
+			Outputs:      definition.Selector.OutputTags,
 		})
 	})
 	return routers
 }
 
-func (e *EventEngine) lookup(router *Router, tags RouterDefinition) *Router {
+func (e *EventEngine) lookup(router *RouteDescriptor, tags RouteMapper) *RouteDescriptor {
 	// filters
-	newMatcher(tags.FilterTags).on(e._filters, func(v interface{}) {
+	newMatcher(tags.Filters).on(e._filters, func(v interface{}) {
 		router.AddFilter(v.(Filter))
 	})
 	// transformer
-	newMatcher(tags.TransformerTags).on(e._transformers, func(v interface{}) {
+	newMatcher(tags.Transformers).on(e._transformers, func(v interface{}) {
 		router.AddTransformer(v.(Transformer))
 	})
 	// output
-	newMatcher(tags.OutputTags).on(e._outputs, func(v interface{}) {
+	newMatcher(tags.Outputs).on(e._outputs, func(v interface{}) {
 		router.AddOutput(v.(Output))
 	})
 	return router
