@@ -3,19 +3,19 @@ package flow
 type RouterGroupDefinition struct {
 	Description string `toml:"description"` // 路由分组描述
 	Selector    struct {
-		InputTags       []string `toml:"inputs"`       // 匹配Input的Tag Pattern
-		FilterTags      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
-		TransformerTags []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
-		OutputTags      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
+		Input        string   `toml:"input"`        // 匹配Input的Tag Pattern
+		Filters      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
+		Transformers []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
+		Outputs      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
 	} `toml:"selector"`
 }
 
 type RouterDefinition struct {
-	Description     string
-	InputTag        string
-	FilterTags      []string
-	TransformerTags []string
-	OutputTags      []string
+	Description  string
+	Input        string
+	Filters      []string
+	Transformers []string
+	Outputs      []string
 }
 
 type Router struct {

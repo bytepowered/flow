@@ -122,7 +122,7 @@ func TestEngineInitWithConfig(t *testing.T) {
 [[router]]
 description = "desc"
 [router.selector]
-inputs = ["input"]
+input = "input"
 outputs = ["output"]
 filters = ["filter"]
 transformers = ["transformer"]
