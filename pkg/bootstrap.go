@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func SetupConfig() error {
+func Setup() error {
 	SetConfigDefaults()
 	if err := viper.ReadInConfig(); err != nil {
 		return fmt.Errorf("read config: %+v", err)
@@ -22,6 +22,8 @@ func Register(obj interface{}) {
 }
 
 func Bootstarp() {
-	runv.Add(new(EventEngine))
+	runv.Add(NewEventEngine(
+		WithQueueSize(10)),
+	)
 	runv.RunV()
 }
