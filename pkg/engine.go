@@ -22,7 +22,7 @@ type EventEngine struct {
 	_filters      []Filter
 	_transformers []Transformer
 	_outputs      []Output
-	_routers      []*RouteDescriptor
+	_pipeline     []*Pipeline
 	queueSize     uint
 	stateContext  context.Context
 	stateFunc     context.CancelFunc
@@ -42,12 +42,12 @@ func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 }
 
 func (e *EventEngine) OnInit() error {
-	e.xlog().Infof("init")
+	e.xlog().Infof("ENGINE: INIT")
 	assert.Must(0 < len(e._inputs), "engine.inputs is required")
 	assert.Must(0 < len(e._outputs), "engine.outputs is required")
 	// 从配置文件中加载route配置项
-	groups := make([]RouteGroupDefinition, 0)
-	if err := UnmarshalConfigKey("router", &groups); err != nil {
+	groups := make([]PipelineDefinition, 0)
+	if err := UnmarshalConfigKey("pipeline", &groups); err != nil {
 		return fmt.Errorf("load 'routers' config error: %w", err)
 	}
 	e.compile(groups)
@@ -56,24 +56,24 @@ func (e *EventEngine) OnInit() error {
 }
 
 func (e *EventEngine) Startup(ctx context.Context) error {
-	e.xlog().Infof("startup")
+	e.xlog().Infof("ENGINE: STARTUP")
 	return nil
 }
 
 func (e *EventEngine) Shutdown(ctx context.Context) error {
 	e.stateFunc()
-	e.xlog().Infof("shutdown")
+	e.xlog().Infof("ENGINE: SHUTDOWN")
 	return nil
 }
 
 func (e *EventEngine) Serve(c context.Context) error {
-	e.xlog().Infof("serve")
+	e.xlog().Infof("ENGINE: SERVE")
 	doqueue := func(ctx context.Context, tag string, queue <-chan Event) {
 		e.xlog().Infof("deliver(%s): queue loop: start", tag)
 		defer e.xlog().Infof("deliver(%s): queue loop: stop", tag)
 		for evt := range queue {
 			stateCtx := NewStatefulContext(ctx, StateAsync)
-			for _, router := range e._routers {
+			for _, router := range e._pipeline {
 				if err := e.route(stateCtx, router, evt); err != nil {
 					e.xlog().Errorf("router.route error: %s", err)
 				}
@@ -81,7 +81,7 @@ func (e *EventEngine) Serve(c context.Context) error {
 		}
 	}
 	// start inputs
-	e.xlog().Infof("start inputs, count: %d", len(e._inputs))
+	e.xlog().Infof("ENGINE: START INPUTS, count: %d", len(e._inputs))
 	for _, input := range e._inputs {
 		// 每个Input维护独立的Queue
 		go func(in Input) {
@@ -95,28 +95,28 @@ func (e *EventEngine) Serve(c context.Context) error {
 	return nil
 }
 
-func (e *EventEngine) route(stateCtx StateContext, router *RouteDescriptor, data Event) error {
+func (e *EventEngine) route(stateCtx StateContext, pipeline *Pipeline, data Event) error {
 	next := FilterFunc(func(ctx StateContext, evt Event) (err error) {
 		// Transform
 		events := []Event{evt}
-		for _, tf := range router.transformers {
+		for _, tf := range pipeline.transformers {
 			events, err = tf.DoTransform(ctx, events)
 			if err != nil {
 				return err
 			}
 		}
-		for _, output := range router.outputs {
+		for _, output := range pipeline.outputs {
 			output.OnSend(ctx.Context(), events...)
 		}
 		return nil
 	})
-	fc := makeFilterChain(next, router.filters)
+	fc := makeFilterChain(next, pipeline.filters)
 	return fc(stateCtx, data)
 }
 
-func (e *EventEngine) GetRouters() []*RouteDescriptor {
-	copied := make([]*RouteDescriptor, len(e._routers))
-	copy(copied, e._routers)
+func (e *EventEngine) GetPipelines() []*Pipeline {
+	copied := make([]*Pipeline, len(e._pipeline))
+	copy(copied, e._pipeline)
 	return copied
 }
 
@@ -163,61 +163,61 @@ func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
 	return next
 }
 
-func (e *EventEngine) compile(definitions []RouteGroupDefinition) {
-	for _, group := range definitions {
-		assert.Must(group.Description != "", "router group, 'description' is required")
-		assert.Must(group.Selector.Input != "", "router group, selector 'input-tags' is required")
-		assert.Must(len(group.Selector.OutputTags) > 0, "router group, selector 'output-tags' is required")
+func (e *EventEngine) compile(definitions []PipelineDefinition) {
+	for _, definition := range definitions {
+		assert.Must(definition.Description != "", "pipeline definition, 'description' is required")
+		assert.Must(definition.Selector.Input != "", "pipeline definition, selector 'input-tags' is required")
+		assert.Must(len(definition.Selector.Outputs) > 0, "pipeline definition, selector 'output-tags' is required")
 		verify := func(tags []string, msg, src string) {
 			for _, t := range tags {
 				assert.Must(len(t) > 0, msg, t, src)
 			}
 		}
-		for _, tr := range e.flat(group) {
-			assert.Must(len(tr.Input) > 0, "router, 'input-tag' is invalid, tag: "+tr.Input+", desc: "+group.Description)
-			verify(tr.Filters, "router, 'filter-tag' is invalid, tag: %s, src: %s", tr.Input)
-			verify(tr.Transformers, "router, 'transformer-tag' is invalid, tag: %s, src: %s", tr.Input)
-			verify(tr.Outputs, "router, 'output-tag' is invalid, tag: %s, src: %s", tr.Input)
-			router := NewRouter(tr.Input)
-			Log().Infof("bind router, input.tag: %s, router: %+v", tr.Input, tr)
-			e._routers = append(e._routers, e.lookup(router, tr))
+		for _, pd := range e.flat(definition) {
+			assert.Must(len(pd.Input) > 0, "pipeline, 'input' tag is invalid, tag: "+pd.Input+", desc: "+definition.Description)
+			verify(pd.Filters, "pipeline, 'filter' tag is invalid, tag: %s, src: %s", pd.Input)
+			verify(pd.Transformers, "pipeline, 'transformer' tag is invalid, tag: %s, src: %s", pd.Input)
+			verify(pd.Outputs, "pipeline, 'output' tag is invalid, tag: %s, src: %s", pd.Input)
+			pipeline := NewPipeline(pd.Input)
+			Log().Infof("ENGINE: BIND-PIPELINE, input: %s, pipeline: %+v", pd.Input, pd)
+			e._pipeline = append(e._pipeline, e.lookup(pipeline, pd))
 		}
 	}
 }
 
 func (e *EventEngine) statechk() error {
-	assert.Must(0 < len(e._routers), "engine.routers is required")
+	assert.Must(0 < len(e._pipeline), "engine.pipelines is required")
 	return nil
 }
 
-func (e *EventEngine) flat(definition RouteGroupDefinition) []RouteMapper {
-	routers := make([]RouteMapper, 0, len(e._inputs))
+func (e *EventEngine) flat(definition PipelineDefinition) []PipelineDescriptor {
+	descriptors := make([]PipelineDescriptor, 0, len(e._inputs))
 	newMatcher([]string{definition.Selector.Input}).on(e._inputs, func(v interface{}) {
-		routers = append(routers, RouteMapper{
+		descriptors = append(descriptors, PipelineDescriptor{
 			Description:  definition.Description,
 			Input:        v.(Input).Tag(),
-			Filters:      definition.Selector.FilterTags,
-			Transformers: definition.Selector.TransformerTags,
-			Outputs:      definition.Selector.OutputTags,
+			Filters:      definition.Selector.Filter,
+			Transformers: definition.Selector.Transformers,
+			Outputs:      definition.Selector.Outputs,
 		})
 	})
-	return routers
+	return descriptors
 }
 
-func (e *EventEngine) lookup(router *RouteDescriptor, tags RouteMapper) *RouteDescriptor {
+func (e *EventEngine) lookup(pipeline *Pipeline, descriptor PipelineDescriptor) *Pipeline {
 	// filters
-	newMatcher(tags.Filters).on(e._filters, func(v interface{}) {
-		router.AddFilter(v.(Filter))
+	newMatcher(descriptor.Filters).on(e._filters, func(v interface{}) {
+		pipeline.AddFilter(v.(Filter))
 	})
 	// transformer
-	newMatcher(tags.Transformers).on(e._transformers, func(v interface{}) {
-		router.AddTransformer(v.(Transformer))
+	newMatcher(descriptor.Transformers).on(e._transformers, func(v interface{}) {
+		pipeline.AddTransformer(v.(Transformer))
 	})
 	// output
-	newMatcher(tags.Outputs).on(e._outputs, func(v interface{}) {
-		router.AddOutput(v.(Output))
+	newMatcher(descriptor.Outputs).on(e._outputs, func(v interface{}) {
+		pipeline.AddOutput(v.(Output))
 	})
-	return router
+	return pipeline
 }
 
 func (e *EventEngine) xlog() *logrus.Entry {

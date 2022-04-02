@@ -119,9 +119,9 @@ func TestEngineInit(t *testing.T) {
 func TestEngineInitWithConfig(t *testing.T) {
 	eng := NewEventEngine()
 	content := `
-[[router]]
+[[pipeline]]
 description = "desc"
-[router.selector]
+[pipeline.selector]
 input = "input"
 outputs = ["output"]
 filters = ["filter"]
@@ -140,10 +140,10 @@ transformers = ["transformer"]
 	eng.AddFilter(f)
 	eng.AddTransformer(tf)
 	assert.Nil(t, eng.OnInit())
-	rs := eng.GetRouters()
-	assert.Equal(t, 1, len(rs))
-	assert.Equal(t, in.Tag(), rs[0].Input)
-	assert.Equal(t, out, rs[0].outputs[0])
-	assert.Equal(t, f, rs[0].filters[0])
-	assert.Equal(t, tf, rs[0].transformers[0])
+	ps := eng.GetPipelines()
+	assert.Equal(t, 1, len(ps))
+	assert.Equal(t, in.Tag(), ps[0].Input)
+	assert.Equal(t, out, ps[0].outputs[0])
+	assert.Equal(t, f, ps[0].filters[0])
+	assert.Equal(t, tf, ps[0].transformers[0])
 }
