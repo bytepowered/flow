@@ -22,7 +22,7 @@ type EventEngine struct {
 	_filters      []Filter
 	_transformers []Transformer
 	_outputs      []Output
-	_pipeline     []*Pipeline
+	_pipelines    []*Pipeline
 	queueSize     uint
 	stateContext  context.Context
 	stateFunc     context.CancelFunc
@@ -67,32 +67,42 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 }
 
 func (e *EventEngine) Serve(c context.Context) error {
-	e.xlog().Infof("ENGINE: SERVE")
-	doqueue := func(ctx context.Context, tag string, queue <-chan Event) {
-		e.xlog().Infof("deliver(%s): queue loop: start", tag)
-		defer e.xlog().Infof("deliver(%s): queue loop: stop", tag)
-		for evt := range queue {
-			stateCtx := NewStatefulContext(ctx, StateAsync)
-			for _, router := range e._pipeline {
-				if err := e.route(stateCtx, router, evt); err != nil {
-					e.xlog().Errorf("router.route error: %s", err)
-				}
+	e.xlog().Infof("ENGINE: SERVE-INPUTS, count: %d", len(e._inputs))
+	for _, input := range e._inputs {
+		// 基于输入源Input来启动独立协程
+		binds := make([]*Pipeline, 0, len(e._pipelines))
+		for _, p := range e._pipelines {
+			if input.Tag() == p.Input {
+				binds = append(binds, p)
+			}
+		}
+		// 确保每个Input至少绑定一个Pipeline
+		if len(binds) == 0 {
+			e.xlog().Infof("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
+			continue
+		}
+		go func(in Input, binds []*Pipeline) {
+			e.xlog().Infof("ENGINE: START-INPUT, tag: %s", in.Tag())
+			queue := make(chan Event, e.queueSize)
+			defer close(queue)
+			go e.doqueue(e.stateContext, in.Tag(), binds, queue)
+			in.OnReceived(e.stateContext, queue)
+		}(input, binds)
+	}
+	return nil
+}
+
+func (e *EventEngine) doqueue(ctx context.Context, tag string, pipelines []*Pipeline, queue <-chan Event) {
+	e.xlog().Infof("ENGINE: INPUT-QUEUE-LOOP-START: tag: %s", tag)
+	defer e.xlog().Infof("ENGINE: INPUT-QUEUE-LOOP-STOP: tag: %s", tag)
+	for evt := range queue {
+		stateCtx := NewStatefulContext(ctx, StateAsync)
+		for _, bind := range pipelines {
+			if err := e.route(stateCtx, bind, evt); err != nil {
+				e.xlog().Errorf("pipeline.route error, input: %s, error: %s", tag, err)
 			}
 		}
 	}
-	// start inputs
-	e.xlog().Infof("ENGINE: START INPUTS, count: %d", len(e._inputs))
-	for _, input := range e._inputs {
-		// 每个Input维护独立的Queue
-		go func(in Input) {
-			queue := make(chan Event, e.queueSize)
-			defer close(queue)
-			go doqueue(e.stateContext, in.Tag(), queue)
-			e.xlog().Infof("start input, tag: %s", in.Tag())
-			in.OnReceived(e.stateContext, queue)
-		}(input)
-	}
-	return nil
 }
 
 func (e *EventEngine) route(stateCtx StateContext, pipeline *Pipeline, data Event) error {
@@ -115,8 +125,8 @@ func (e *EventEngine) route(stateCtx StateContext, pipeline *Pipeline, data Even
 }
 
 func (e *EventEngine) GetPipelines() []*Pipeline {
-	copied := make([]*Pipeline, len(e._pipeline))
-	copy(copied, e._pipeline)
+	copied := make([]*Pipeline, len(e._pipelines))
+	copy(copied, e._pipelines)
 	return copied
 }
 
@@ -166,8 +176,8 @@ func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
 func (e *EventEngine) compile(definitions []PipelineDefinition) {
 	for _, definition := range definitions {
 		assert.Must(definition.Description != "", "pipeline definition, 'description' is required")
-		assert.Must(definition.Selector.Input != "", "pipeline definition, selector 'input-tags' is required")
-		assert.Must(len(definition.Selector.Outputs) > 0, "pipeline definition, selector 'output-tags' is required")
+		assert.Must(definition.Selector.InputExpr != "", "pipeline definition, selector 'input-tags' is required")
+		assert.Must(len(definition.Selector.OutputsExpr) > 0, "pipeline definition, selector 'output-tags' is required")
 		verify := func(tags []string, msg, src string) {
 			for _, t := range tags {
 				assert.Must(len(t) > 0, msg, t, src)
@@ -180,41 +190,42 @@ func (e *EventEngine) compile(definitions []PipelineDefinition) {
 			verify(pd.Outputs, "pipeline, 'output' tag is invalid, tag: %s, src: %s", pd.Input)
 			pipeline := NewPipeline(pd.Input)
 			Log().Infof("ENGINE: BIND-PIPELINE, input: %s, pipeline: %+v", pd.Input, pd)
-			e._pipeline = append(e._pipeline, e.lookup(pipeline, pd))
+			e._pipelines = append(e._pipelines, e.register(pipeline, pd))
 		}
 	}
 }
 
 func (e *EventEngine) statechk() error {
-	assert.Must(0 < len(e._pipeline), "engine.pipelines is required")
+	assert.Must(0 < len(e._pipelines), "engine.pipelines is required")
 	return nil
 }
 
 func (e *EventEngine) flat(definition PipelineDefinition) []PipelineDescriptor {
 	descriptors := make([]PipelineDescriptor, 0, len(e._inputs))
-	newMatcher([]string{definition.Selector.Input}).on(e._inputs, func(v interface{}) {
+	// 从Input实例列表中，根据Tag匹配实例对象
+	newMatcher([]string{definition.Selector.InputExpr}).on(e._inputs, func(tag string, _ interface{}) {
 		descriptors = append(descriptors, PipelineDescriptor{
 			Description:  definition.Description,
-			Input:        v.(Input).Tag(),
-			Filters:      definition.Selector.Filter,
-			Transformers: definition.Selector.Transformers,
-			Outputs:      definition.Selector.Outputs,
+			Input:        tag,
+			Filters:      definition.Selector.FiltersExpr,
+			Transformers: definition.Selector.TransformersExpr,
+			Outputs:      definition.Selector.OutputsExpr,
 		})
 	})
 	return descriptors
 }
 
-func (e *EventEngine) lookup(pipeline *Pipeline, descriptor PipelineDescriptor) *Pipeline {
+func (e *EventEngine) register(pipeline *Pipeline, descriptor PipelineDescriptor) *Pipeline {
 	// filters
-	newMatcher(descriptor.Filters).on(e._filters, func(v interface{}) {
+	newMatcher(descriptor.Filters).on(e._filters, func(tag string, v interface{}) {
 		pipeline.AddFilter(v.(Filter))
 	})
 	// transformer
-	newMatcher(descriptor.Transformers).on(e._transformers, func(v interface{}) {
+	newMatcher(descriptor.Transformers).on(e._transformers, func(tag string, v interface{}) {
 		pipeline.AddTransformer(v.(Transformer))
 	})
 	// output
-	newMatcher(descriptor.Outputs).on(e._outputs, func(v interface{}) {
+	newMatcher(descriptor.Outputs).on(e._outputs, func(tag string, v interface{}) {
 		pipeline.AddOutput(v.(Output))
 	})
 	return pipeline

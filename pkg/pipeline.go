@@ -3,10 +3,10 @@ package flow
 type PipelineDefinition struct {
 	Description string `toml:"description"` // 路由分组描述
 	Selector    struct {
-		Input        string   `toml:"input"`        // 匹配Input的Tag Pattern
-		Filter       []string `toml:"filters"`      // 匹配Filter的Tag Pattern
-		Transformers []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
-		Outputs      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
+		InputExpr        string   `toml:"input"`        // 匹配Input的Tag Pattern
+		FiltersExpr      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
+		TransformersExpr []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
+		OutputsExpr      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
 	} `toml:"selector"`
 }
 

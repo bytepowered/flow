@@ -12,7 +12,7 @@ func newMatcher(patterns []string) matcher {
 	return patterns
 }
 
-func (m matcher) on(plugins interface{}, acceptor func(interface{})) {
+func (m matcher) on(plugins interface{}, acceptor func(tag string, plg interface{})) {
 	vs := reflect.ValueOf(plugins)
 	assert.Must(vs.Kind() == reflect.Slice, "'plugins' must be a slice")
 	for i := 0; i < vs.Len(); i++ {
@@ -23,7 +23,7 @@ func (m matcher) on(plugins interface{}, acceptor func(interface{})) {
 		tag := plg.Tag()
 		for _, pattern := range m {
 			if match0(pattern, tag) {
-				acceptor(objv)
+				acceptor(tag, objv)
 			}
 		}
 	}

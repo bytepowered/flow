@@ -23,6 +23,7 @@ func SetConfigDefaults() {
 	viper.SetConfigName("application")
 	viper.SetConfigType("toml")
 	viper.AddConfigPath("./conf.d")
+	viper.AddConfigPath(".")
 }
 
 func UnmarshalConfigKey(key string, structptr interface{}) error {

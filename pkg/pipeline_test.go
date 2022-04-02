@@ -76,9 +76,9 @@ transformers = ["t1", "t2"]
 	assert.Equal(t, 2, len(definitions))
 	for _, d := range definitions {
 		assert.Equal(t, "desc", d.Description)
-		assert.Equal(t, "i1", d.Selector.Input)
-		assert.Equal(t, []string{"o1", "o2"}, d.Selector.Outputs)
-		assert.Equal(t, []string{"f1", "f2"}, d.Selector.Filter)
-		assert.Equal(t, []string{"t1", "t2"}, d.Selector.Transformers)
+		assert.Equal(t, "i1", d.Selector.InputExpr)
+		assert.Equal(t, []string{"o1", "o2"}, d.Selector.OutputsExpr)
+		assert.Equal(t, []string{"f1", "f2"}, d.Selector.FiltersExpr)
+		assert.Equal(t, []string{"t1", "t2"}, d.Selector.TransformersExpr)
 	}
 }
