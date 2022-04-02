@@ -1,10 +1,12 @@
-package extends
+package output
 
 import (
 	"context"
 	flow "github.com/bytepowered/flow/v3/pkg"
 	"github.com/sirupsen/logrus"
 )
+
+const consoleTag = "console"
 
 var _ flow.Output = new(ConsoleWriter)
 
@@ -13,14 +15,12 @@ type ConsoleWriter struct {
 }
 
 func (c *ConsoleWriter) Tag() string {
-	return "console"
+	return consoleTag
 }
 
 func (c *ConsoleWriter) OnSend(ctx context.Context, events ...flow.Event) {
-	console := flow.Log().WithField("source", c.Tag())
-	console.Level = c.Level
 	for _, evt := range events {
-		console.Infof("tag: %s, kind: %s, time: %s, data: %+v",
-			evt.Tag(), evt.Kind().String(), evt.Time().String(), evt.Record())
+		flow.Log().Logf(c.Level, "tag: %s, time: %s, data: %+v",
+			evt.Tag(), evt.Time().String(), evt.Record())
 	}
 }

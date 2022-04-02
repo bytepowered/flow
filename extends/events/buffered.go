@@ -1,23 +1,24 @@
-package flow
+package events
 
 import (
 	"bytes"
+	"github.com/bytepowered/flow/v3/pkg"
 	"time"
 )
 
-var _ Event = new(BufferedEvent)
+var _ flow.Event = new(BufferedEvent)
 
 type BufferedEvent struct {
-	Headers Header
+	Headers flow.Header
 	buffer  *bytes.Buffer
 	t       time.Time
 }
 
-func BufferedEventOf(header Header, data []byte) *BufferedEvent {
+func BufferedEventOf(header flow.Header, data []byte) *BufferedEvent {
 	return NewBufferedEvent(header, bytes.NewBuffer(data))
 }
 
-func NewBufferedEvent(header Header, buffer *bytes.Buffer) *BufferedEvent {
+func NewBufferedEvent(header flow.Header, buffer *bytes.Buffer) *BufferedEvent {
 	return &BufferedEvent{
 		Headers: header,
 		buffer:  buffer,
@@ -29,7 +30,7 @@ func (e BufferedEvent) Tag() string {
 	return e.Headers.Tag
 }
 
-func (e BufferedEvent) Kind() Kind {
+func (e BufferedEvent) Kind() flow.Kind {
 	return e.Headers.Kind
 }
 
@@ -37,7 +38,7 @@ func (e BufferedEvent) Time() time.Time {
 	return e.t
 }
 
-func (e BufferedEvent) Header() Header {
+func (e BufferedEvent) Header() flow.Header {
 	return e.Headers
 }
 
