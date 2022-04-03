@@ -2,6 +2,7 @@ package flow
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -19,11 +20,18 @@ func (s State) Is(state State) bool {
 	return int(s)&int(state) != 0
 }
 
+var _ fmt.Stringer = new(Header)
+
 // Header 事件Header
 type Header struct {
 	Time int64  `json:"etimens"` // 用于标识发生事件的时间戳，精确到纳秒
 	Tag  string `json:"etag"`    // 用于标识发生事件来源的标签，通常格式为: origin.vendor
 	Kind Kind   `json:"ekind"`   // 事件类型，由业务定义
+}
+
+func (h Header) String() string {
+	return fmt.Sprintf(`time: %s, tag: %s, kind: %s`,
+		time.UnixMilli(time.Duration(h.Time).Milliseconds()), h.Tag, h.Kind)
 }
 
 // Event 具体Event消息接口
