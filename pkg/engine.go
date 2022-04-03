@@ -6,6 +6,7 @@ import (
 	"github.com/bytepowered/runv"
 	"github.com/bytepowered/runv/assert"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -28,11 +29,18 @@ type EventEngine struct {
 	stateFunc     context.CancelFunc
 }
 
+const (
+	engineConfigQueueSizeKey = "engine.queue-size"
+	engineConfigOrderKey     = "engine.order"
+)
+
 func NewEventEngine(opts ...EventEngineOption) *EventEngine {
+	viper.SetDefault(engineConfigQueueSizeKey, 10)
+	viper.SetDefault(engineConfigOrderKey, 10000)
 	ctx, ctxfunc := context.WithCancel(context.Background())
 	engine := &EventEngine{
 		stateContext: ctx, stateFunc: ctxfunc,
-		queueSize: 10,
+		queueSize: viper.GetUint(engineConfigQueueSizeKey),
 	}
 	for _, opt := range opts {
 		opt(engine)
@@ -163,7 +171,7 @@ func (e *EventEngine) AddTransformer(v Transformer) {
 }
 
 func (e *EventEngine) Order(state runv.State) int {
-	return 10_0000 // 所有生命周期都靠后
+	return viper.GetInt(engineConfigOrderKey) // 所有生命周期都靠后
 }
 
 func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
