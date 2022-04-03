@@ -47,14 +47,17 @@ func (r *FileStreamReader) OnReceived(ctx context.Context, queue chan<- flow.Eve
 	f, err := os.OpenFile(r.filepath, os.O_RDONLY, os.FileMode(0))
 	if err != nil {
 		flow.Log().Panicf("FILESTREAM: open file error: %s", err.Error())
+		return
 	}
 	fi, err := f.Stat()
 	if err != nil {
 		flow.Log().Panicf("FILESTREAM: failed to stat file %s: %s", r.filepath, err)
+		return
 	}
 	err = checkRegularFile(fi)
 	if err != nil {
 		flow.Log().Panic(err)
+		return
 	}
 	flow.Log().Infof("FILESTREAM: scan file: %s", r.filepath)
 	scan := bufio.NewScanner(f)

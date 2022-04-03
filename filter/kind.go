@@ -10,8 +10,8 @@ var _ flow.Filter = new(KindFilter)
 var _ runv.Initable = new(KindFilter)
 
 type KindOptions struct {
-	Allowed  []flow.Kind `toml:"allow-kinds"`
-	Rejected []flow.Kind `toml:"reject-kinds"`
+	Allows []flow.Kind `toml:"allows"`
+	Drops  []flow.Kind `toml:"drops"`
 }
 
 type KindConfig struct {
@@ -32,19 +32,19 @@ func (h *KindFilter) Tag() string {
 }
 
 func (h *KindFilter) OnInit() error {
-	assert.Must(len(h.config.Opts.Allowed)+len(h.config.Opts.Rejected) > 0, "allows/rejects is required")
+	assert.Must(len(h.config.Opts.Allows)+len(h.config.Opts.Drops) > 0, "allows/drops is required")
 	return nil
 }
 
 func (h *KindFilter) DoFilter(next flow.FilterFunc) flow.FilterFunc {
-	allowed := len(h.config.Opts.Allowed) > 0
-	rejected := len(h.config.Opts.Rejected) > 0
+	allows := len(h.config.Opts.Allows) > 0
+	drops := len(h.config.Opts.Drops) > 0
 	return func(ctx flow.StateContext, event flow.Event) error {
 		etype := event.Header().Kind
-		if allowed && h.contains(h.config.Opts.Allowed, etype) {
+		if allows && h.contains(h.config.Opts.Allows, etype) {
 			return next(ctx, event)
 		}
-		if rejected && h.contains(h.config.Opts.Rejected, etype) {
+		if drops && h.contains(h.config.Opts.Drops, etype) {
 			return nil
 		}
 		return next(ctx, event)

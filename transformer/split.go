@@ -10,24 +10,24 @@ import (
 	"strings"
 )
 
-const linesplitTag = "linesplit"
+const splitTag = "split"
 
-var _ flow.Transformer = new(LineSplitTransformer)
-var _ runv.Initable = new(LineSplitTransformer)
+var _ flow.Transformer = new(SplitTransformer)
+var _ runv.Initable = new(SplitTransformer)
 
-func NewLineSplitTransformer() *LineSplitTransformer {
-	return &LineSplitTransformer{
+func NewSplitTransformer() *SplitTransformer {
+	return &SplitTransformer{
 		separator: ",",
 		subsize:   0,
 	}
 }
 
-type LineSplitTransformer struct {
+type SplitTransformer struct {
 	separator string
 	subsize   uint
 }
 
-func (c *LineSplitTransformer) OnInit() error {
+func (c *SplitTransformer) OnInit() error {
 	with := func(prefix string) {
 		viper.SetDefault(prefix+"separator", ",")
 		c.separator = viper.GetString(prefix + "separator")
@@ -37,11 +37,11 @@ func (c *LineSplitTransformer) OnInit() error {
 	return nil
 }
 
-func (c *LineSplitTransformer) Tag() string {
-	return linesplitTag
+func (c *SplitTransformer) Tag() string {
+	return splitTag
 }
 
-func (c *LineSplitTransformer) DoTransform(ctx flow.StateContext, in []flow.Event) (out []flow.Event, err error) {
+func (c *SplitTransformer) DoTransform(ctx flow.StateContext, in []flow.Event) (out []flow.Event, err error) {
 	subsize := int(c.subsize)
 	for _, evt := range in {
 		data := evt.Record()
@@ -56,8 +56,9 @@ func (c *LineSplitTransformer) DoTransform(ctx flow.StateContext, in []flow.Even
 		default:
 			return nil, fmt.Errorf("unsupported data type to split, was: %T", data)
 		}
+		// drop event
 		if subsize > 0 && subsize != len(fields) {
-			flow.Log().Debugf("FILESTREAM: Drop event, subsize/fields=%d/%d", subsize, len(fields))
+			flow.Log().Debugf("SPLIT: Drop event, subsize/fields=%d/%d", subsize, len(fields))
 			continue
 		}
 		out = append(out, events.NewStringFieldsEvent(evt, fields))
