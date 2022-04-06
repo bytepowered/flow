@@ -67,7 +67,7 @@ func doTestMatcher(t *testing.T, tags []string, expected int) {
 	count := 0
 	wc.on([]interface{}{
 		new(matchFilter), new(matchOutput), new(matchTransformer),
-	}, func(plugin interface{}) {
+	}, func(tag string, plugin interface{}) {
 		assert.NotNil(t, plugin, "accepted plugin must not nil")
 		count++
 	})
