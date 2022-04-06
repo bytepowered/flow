@@ -21,7 +21,7 @@ func Register(obj interface{}) {
 	runv.Add(obj)
 }
 
-func Bootstarp() {
+func Bootstrap() {
 	runv.Add(NewEventEngine(
 		WithQueueSize(10)),
 	)
