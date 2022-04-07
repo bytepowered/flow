@@ -7,6 +7,7 @@ import (
 	"github.com/bytepowered/runv/assert"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"strings"
 )
 
 var (
@@ -55,11 +56,28 @@ func (e *EventEngine) OnInit() error {
 	assert.Must(0 < len(e._outputs), "engine.outputs is required")
 	// 从配置文件中加载route配置项
 	groups := make([]PipelineDefinition, 0)
-	if err := UnmarshalConfigKey("pipeline", &groups); err != nil {
-		return fmt.Errorf("load 'routers' config error: %w", err)
+	viper.SetDefault("engine.workmode", "pipeline")
+	mode := viper.GetString("engine.workmode")
+	switch strings.ToLower(mode) {
+	case "single":
+		groups = append(groups, PipelineDefinition{
+			Description: "run on single mode",
+			Selector: PipelineSelector{
+				InputExpr:        "*",
+				FiltersExpr:      []string{"*"},
+				TransformersExpr: []string{"*"},
+				OutputsExpr:      []string{"*"},
+			},
+		})
+	default:
+		fallthrough
+	case "pipeline":
+		if err := UnmarshalConfigKey("pipeline", &groups); err != nil {
+			return fmt.Errorf("load 'routers' config error: %w", err)
+		}
 	}
 	e.compile(groups)
-	e.xlog().Infof("init load router groups: %d", len(groups))
+	e.xlog().Infof("ENGINE: INIT, WorkMode: %s, pipelines: %d", mode, len(groups))
 	return nil
 }
 

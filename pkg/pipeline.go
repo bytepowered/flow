@@ -1,13 +1,15 @@
 package flow
 
+type PipelineSelector struct {
+	InputExpr        string   `toml:"input"`        // 匹配Input的Tag Pattern
+	FiltersExpr      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
+	TransformersExpr []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
+	OutputsExpr      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
+}
+
 type PipelineDefinition struct {
-	Description string `toml:"description"` // 路由分组描述
-	Selector    struct {
-		InputExpr        string   `toml:"input"`        // 匹配Input的Tag Pattern
-		FiltersExpr      []string `toml:"filters"`      // 匹配Filter的Tag Pattern
-		TransformersExpr []string `toml:"transformers"` // 匹配Transformer的Tag Pattern
-		OutputsExpr      []string `toml:"outputs"`      // 匹配Dispatcher的Tag Pattern
-	} `toml:"selector"`
+	Description string           `toml:"description"` // 路由分组描述
+	Selector    PipelineSelector `toml:"selector"`
 }
 
 type PipelineDescriptor struct {
