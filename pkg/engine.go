@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"strings"
+	"sync"
 )
 
 var (
@@ -15,6 +16,11 @@ var (
 	_ runv.Liveness  = new(EventEngine)
 	_ runv.Liveorder = new(EventEngine)
 	_ runv.Servable  = new(EventEngine)
+)
+
+const (
+	WorkModeSingle   = "single"
+	WorkModePipeline = "pipeline"
 )
 
 type EventEngineOption func(*EventEngine)
@@ -26,6 +32,7 @@ type EventEngine struct {
 	_outputs      []Output
 	_pipelines    []*Pipeline
 	queueSize     uint
+	workMode      string
 	stateContext  context.Context
 	stateFunc     context.CancelFunc
 }
@@ -56,10 +63,13 @@ func (e *EventEngine) OnInit() error {
 	assert.Must(0 < len(e._outputs), "engine.outputs is required")
 	// 从配置文件中加载route配置项
 	groups := make([]PipelineDefinition, 0)
-	viper.SetDefault("engine.workmode", "pipeline")
+	// WorkMode: 决定Engine对事件流的处理方式
+	// 1. Single: 所有组件组合为单个事件处理链；
+	// 2. Pipeline：根据Pipeline定义来定义多个事件处理链；
+	viper.SetDefault("engine.workmode", WorkModePipeline)
 	mode := viper.GetString("engine.workmode")
 	switch strings.ToLower(mode) {
-	case "single":
+	case WorkModeSingle:
 		groups = append(groups, PipelineDefinition{
 			Description: "run on single mode",
 			Selector: PipelineSelector{
@@ -71,7 +81,7 @@ func (e *EventEngine) OnInit() error {
 		})
 	default:
 		fallthrough
-	case "pipeline":
+	case WorkModePipeline:
 		if err := UnmarshalConfigKey("pipeline", &groups); err != nil {
 			return fmt.Errorf("load 'routers' config error: %w", err)
 		}
@@ -93,9 +103,10 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 }
 
 func (e *EventEngine) Serve(c context.Context) error {
-	e.xlog().Infof("ENGINE: SERVE-INPUTS, count: %d", len(e._inputs))
+	e.xlog().Infof("ENGINE: SERVE, start, input-count: %d", len(e._inputs))
+	defer e.xlog().Infof("ENGINE: SERVE, stop")
+	inputwg := new(sync.WaitGroup)
 	for _, input := range e._inputs {
-		// 基于输入源Input来启动独立协程
 		binds := make([]*Pipeline, 0, len(e._pipelines))
 		for _, p := range e._pipelines {
 			if input.Tag() == p.Input {
@@ -107,14 +118,18 @@ func (e *EventEngine) Serve(c context.Context) error {
 			e.xlog().Infof("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
 			continue
 		}
+		// 基于输入源Input来启动独立协程
+		inputwg.Add(1)
 		go func(in Input, binds []*Pipeline) {
 			e.xlog().Infof("ENGINE: START-INPUT, tag: %s", in.Tag())
 			queue := make(chan Event, e.queueSize)
 			defer close(queue)
 			go e.doqueue(e.stateContext, in.Tag(), binds, queue)
+			defer inputwg.Done()
 			in.OnReceived(e.stateContext, queue)
 		}(input, binds)
 	}
+	inputwg.Wait()
 	return nil
 }
 
