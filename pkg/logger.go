@@ -45,10 +45,10 @@ func InitLogger() error {
 }
 
 func NewLogger() (*logrus.Logger, error) {
-	viper.SetDefault("app.log.path", "logs")
-	viper.SetDefault("app.log.level", "debug")
-	viper.SetDefault("app.log.format", "json")
-	viper.SetDefault("app.log.caller", true)
+	viper.SetDefault("engine.logger.path", "logs")
+	viper.SetDefault("engine.logger.level", "debug")
+	viper.SetDefault("engine.logger.format", "json")
+	viper.SetDefault("engine.logger.caller", true)
 	var (
 		formatter logrus.Formatter
 		fields    = logrus.FieldMap{
@@ -61,7 +61,7 @@ func NewLogger() (*logrus.Logger, error) {
 			return ext.LogShortCaller(frame.Func.Name(), frame.Line), ""
 		}
 	)
-	if strings.EqualFold("json", viper.GetString("app.log.format")) {
+	if strings.EqualFold("json", viper.GetString("engine.logger.format")) {
 		formatter = &logrus.JSONFormatter{
 			PrettyPrint:      false,
 			FieldMap:         fields,
@@ -74,11 +74,11 @@ func NewLogger() (*logrus.Logger, error) {
 			CallerPrettyfier: caller,
 		}
 	}
-	level, err := logrus.ParseLevel(viper.GetString("app.log.level"))
+	level, err := logrus.ParseLevel(viper.GetString("engine.logger.level"))
 	if err != nil {
 		return nil, fmt.Errorf("fatal parse log level: %w", err)
 	}
-	dir := viper.GetString("app.log.path")
+	dir := viper.GetString("engine.logger.path")
 	_ = os.Mkdir(dir, os.ModePerm)
 	file, err := os.OpenFile(dir+"/app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -90,7 +90,7 @@ func NewLogger() (*logrus.Logger, error) {
 		Hooks:        make(logrus.LevelHooks),
 		Level:        level,
 		ExitFunc:     os.Exit,
-		ReportCaller: viper.GetBool("app.log.caller"),
+		ReportCaller: viper.GetBool("engine.logger.caller"),
 	}
 	return newLogger, nil
 }
