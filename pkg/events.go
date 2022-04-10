@@ -1,19 +1,16 @@
-package events
+package flow
 
-import (
-	"github.com/bytepowered/flow/v3/pkg"
-	"time"
-)
+import "time"
 
-var _ flow.Event = new(StringEvent)
+var _ Event = new(StringEvent)
 
 type StringEvent struct {
-	Headers flow.Header
+	Headers Header
 	record  string
 	t       time.Time
 }
 
-func NewStringEvent(header flow.Header, data string) *StringEvent {
+func NewStringEvent(header Header, data string) *StringEvent {
 	return &StringEvent{
 		Headers: header,
 		record:  data,
@@ -25,7 +22,7 @@ func (e *StringEvent) Tag() string {
 	return e.Headers.Tag
 }
 
-func (e *StringEvent) Kind() flow.Kind {
+func (e *StringEvent) Kind() Kind {
 	return e.Headers.Kind
 }
 
@@ -33,7 +30,7 @@ func (e *StringEvent) Time() time.Time {
 	return e.t
 }
 
-func (e *StringEvent) Header() flow.Header {
+func (e *StringEvent) Header() Header {
 	return e.Headers
 }
 

@@ -121,21 +121,29 @@ func (e *EventEngine) Serve(c context.Context) error {
 		// 基于输入源Input来启动独立协程
 		inputwg.Add(1)
 		go func(in Input, binds []*Pipeline) {
+			defer inputwg.Done()
 			e.xlog().Infof("ENGINE: START-INPUT, tag: %s", in.Tag())
 			queue := make(chan Event, e.queueSize)
-			defer close(queue)
-			go e.doqueue(e.stateContext, in.Tag(), binds, queue)
-			defer inputwg.Done()
-			in.OnReceived(e.stateContext, queue)
+			qdone := make(chan struct{}, 0)
+			go func(qdone chan struct{}) {
+				defer close(qdone)
+				e.xlog().Infof("ENGINE: INPUT-QUEUE-START: tag: %s", in.Tag())
+				defer e.xlog().Infof("ENGINE: INPUT-QUEUE-STOP: tag: %s", in.Tag())
+				e.qconsume(e.stateContext, in.Tag(), binds, queue)
+			}(qdone)
+			// 确保关闭缓存队列
+			func() {
+				defer close(queue)
+				in.OnReceived(e.stateContext, queue)
+			}()
+			<-qdone // 等待消费队列完成
 		}(input, binds)
 	}
 	inputwg.Wait()
 	return nil
 }
 
-func (e *EventEngine) doqueue(ctx context.Context, tag string, pipelines []*Pipeline, queue <-chan Event) {
-	e.xlog().Infof("ENGINE: INPUT-QUEUE-LOOP-START: tag: %s", tag)
-	defer e.xlog().Infof("ENGINE: INPUT-QUEUE-LOOP-STOP: tag: %s", tag)
+func (e *EventEngine) qconsume(ctx context.Context, tag string, pipelines []*Pipeline, queue <-chan Event) {
 	for evt := range queue {
 		stateCtx := NewStatefulContext(ctx, StateAsync)
 		for _, bind := range pipelines {
