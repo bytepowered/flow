@@ -6,14 +6,14 @@ var _ Event = new(StringEvent)
 
 type StringEvent struct {
 	Headers Header
-	record  string
+	data    string
 	t       time.Time
 }
 
 func NewStringEvent(header Header, data string) *StringEvent {
 	return &StringEvent{
 		Headers: header,
-		record:  data,
+		data:    data,
 		t:       time.UnixMicro(time.Duration(header.Time).Microseconds()),
 	}
 }
@@ -35,9 +35,9 @@ func (e *StringEvent) Header() Header {
 }
 
 func (e *StringEvent) Record() interface{} {
-	return e.record
+	return e.data
 }
 
 func (e *StringEvent) Frames() []byte {
-	return []byte(e.record)
+	return []byte(e.data)
 }
