@@ -14,7 +14,10 @@ workmode = "single"
 [engine.logger]
 caller = false
 format = "text"
-level = "warn"
+level = "debug"
+[engine.logger.text]
+force_color = true
+pad_level = true
 `
 	viper.SetConfigType("toml")
 	assert.Nil(t, SetupWithConfig(bytes.NewReader([]byte(content))), "setup")

@@ -52,8 +52,8 @@ func NewLogger() (*logrus.Logger, error) {
 	var (
 		formatter logrus.Formatter
 		fields    = logrus.FieldMap{
-			logrus.FieldKeyTime:  "@timestamp",
-			logrus.FieldKeyLevel: "level",
+			logrus.FieldKeyTime:  "time",
+			logrus.FieldKeyLevel: "lv",
 			logrus.FieldKeyMsg:   "msg",
 			logrus.FieldKeyFunc:  "caller",
 		}
@@ -61,16 +61,18 @@ func NewLogger() (*logrus.Logger, error) {
 			return ext.LogShortCaller(frame.Func.Name(), frame.Line), ""
 		}
 	)
-	if strings.EqualFold("json", viper.GetString("engine.logger.format")) {
+	switch strings.ToLower(viper.GetString("engine.logger.format")) {
+	case "json":
 		formatter = &logrus.JSONFormatter{
-			PrettyPrint:      false,
+			PrettyPrint:      viper.GetBool("engine.logger.json.pretty"),
 			FieldMap:         fields,
 			CallerPrettyfier: caller,
 		}
-	} else {
+	case "text":
 		formatter = &logrus.TextFormatter{
-			DisableColors:    true,
-			ForceColors:      false,
+			DisableColors:    viper.GetBool("engine.logger.text.disable_color"),
+			ForceColors:      viper.GetBool("engine.logger.text.force_color"),
+			PadLevelText:     viper.GetBool("engine.logger.text.pad_level"),
 			CallerPrettyfier: caller,
 		}
 	}

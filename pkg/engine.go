@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/bytepowered/runv"
 	"github.com/bytepowered/runv/assert"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"strings"
 	"sync"
@@ -58,7 +57,7 @@ func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 }
 
 func (e *EventEngine) OnInit() error {
-	e.xlog().Infof("ENGINE: INIT")
+	Log().Infof("ENGINE: INIT")
 	assert.Must(0 < len(e._inputs), "engine.inputs is required")
 	assert.Must(0 < len(e._outputs), "engine.outputs is required")
 	// 从配置文件中加载route配置项
@@ -87,24 +86,24 @@ func (e *EventEngine) OnInit() error {
 		}
 	}
 	e.compile(groups)
-	e.xlog().Infof("ENGINE: INIT, WorkMode: %s, pipelines: %d", mode, len(groups))
+	Log().Infof("ENGINE: INIT, WorkMode: %s, pipelines: %d", mode, len(groups))
 	return nil
 }
 
 func (e *EventEngine) Startup(ctx context.Context) error {
-	e.xlog().Infof("ENGINE: STARTUP")
+	Log().Infof("ENGINE: STARTUP")
 	return nil
 }
 
 func (e *EventEngine) Shutdown(ctx context.Context) error {
 	e.stateFunc()
-	e.xlog().Infof("ENGINE: SHUTDOWN")
+	Log().Infof("ENGINE: SHUTDOWN")
 	return nil
 }
 
 func (e *EventEngine) Serve(c context.Context) error {
-	e.xlog().Infof("ENGINE: SERVE, start, input-count: %d", len(e._inputs))
-	defer e.xlog().Infof("ENGINE: SERVE, stop")
+	Log().Infof("ENGINE: SERVE, start, input-count: %d", len(e._inputs))
+	defer Log().Infof("ENGINE: SERVE, stop")
 	inputwg := new(sync.WaitGroup)
 	for _, input := range e._inputs {
 		binds := make([]*Pipeline, 0, len(e._pipelines))
@@ -115,20 +114,20 @@ func (e *EventEngine) Serve(c context.Context) error {
 		}
 		// 确保每个Input至少绑定一个Pipeline
 		if len(binds) == 0 {
-			e.xlog().Infof("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
+			Log().Infof("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
 			continue
 		}
 		// 基于输入源Input来启动独立协程
 		inputwg.Add(1)
 		go func(in Input, binds []*Pipeline) {
 			defer inputwg.Done()
-			e.xlog().Infof("ENGINE: START-INPUT, tag: %s", in.Tag())
+			Log().Infof("ENGINE: START-INPUT, tag: %s", in.Tag())
 			queue := make(chan Event, e.queueSize)
 			qdone := make(chan struct{}, 0)
 			go func(qdone chan struct{}) {
 				defer close(qdone)
-				e.xlog().Infof("ENGINE: INPUT-QUEUE-START: tag: %s", in.Tag())
-				defer e.xlog().Infof("ENGINE: INPUT-QUEUE-STOP: tag: %s", in.Tag())
+				Log().Infof("ENGINE: INPUT-QUEUE-START: tag: %s", in.Tag())
+				defer Log().Infof("ENGINE: INPUT-QUEUE-STOP: tag: %s", in.Tag())
 				e.qconsume(e.stateContext, in.Tag(), binds, queue)
 			}(qdone)
 			// 确保关闭缓存队列
@@ -148,7 +147,7 @@ func (e *EventEngine) qconsume(ctx context.Context, tag string, pipelines []*Pip
 		stateCtx := NewStatefulContext(ctx, StateAsync)
 		for _, bind := range pipelines {
 			if err := e.route(stateCtx, bind, evt); err != nil {
-				e.xlog().Errorf("pipeline.route error, input: %s, error: %s", tag, err)
+				Log().Errorf("pipeline.route error, input: %s, error: %s", tag, err)
 			}
 		}
 	}
@@ -278,10 +277,6 @@ func (e *EventEngine) register(pipeline *Pipeline, descriptor PipelineDescriptor
 		pipeline.AddOutput(v.(Output))
 	})
 	return pipeline
-}
-
-func (e *EventEngine) xlog() *logrus.Entry {
-	return Log().WithField("app", "engine")
 }
 
 func WithQueueSize(size uint) EventEngineOption {

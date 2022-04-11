@@ -27,14 +27,14 @@ func NewConsoleWriter() *ConsoleWriter {
 
 func (c *ConsoleWriter) OnInit() error {
 	viper.SetDefault("console.level", "info")
-	viper.SetDefault("console.show-header", false)
+	viper.SetDefault("console.show_header", false)
 	lv, err := logrus.ParseLevel(viper.GetString("console.level"))
 	if err != nil {
 		return err
 	}
 	c.Level = lv
-	c.ShowHeader = viper.GetBool("console.show-header")
-	flow.Log().Infof("CONSOLE: options, level=%s, show-header:%v", lv, c.ShowHeader)
+	c.ShowHeader = viper.GetBool("console.show_header")
+	flow.Log().Infof("CONSOLE: options, level=%s, show_header:%v", lv, c.ShowHeader)
 	return nil
 }
 
@@ -45,9 +45,9 @@ func (c *ConsoleWriter) Tag() string {
 func (c *ConsoleWriter) OnSend(ctx context.Context, events ...flow.Event) {
 	for _, evt := range events {
 		if c.ShowHeader {
-			flow.Log().WithField("header", evt.Header()).Logf(c.Level, "data: %s", evt.Record())
+			flow.Log().WithField("header", evt.Header()).Log(c.Level, evt.Record())
 		} else {
-			flow.Log().Logf(c.Level, "data: %s", evt.Record())
+			flow.Log().Log(c.Level, evt.Record())
 		}
 	}
 }
