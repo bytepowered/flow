@@ -27,6 +27,7 @@ type Header struct {
 	Time int64  `json:"etimens"` // 用于标识发生事件的时间戳，精确到纳秒
 	Tag  string `json:"etag"`    // 用于标识发生事件来源的标签，通常格式为: origin.vendor
 	Kind Kind   `json:"ekind"`   // 事件类型，由业务定义
+	Id   int64  `json:"eid"`     // 事件ID
 }
 
 func (h Header) String() string {
@@ -42,6 +43,8 @@ type Event interface {
 	Kind() Kind
 	// Time 返回事件发生时间。与 Header.Time 一致。
 	Time() time.Time
+	// ID 返回事件ID，与 Header.Id 一致。
+	ID() int64
 	// Header 返回事件Header
 	Header() Header
 	// Record 返回事件记录对象

@@ -18,6 +18,10 @@ func NewObjectEvent(header Header, object interface{}) *ObjectEvent {
 	}
 }
 
+func (e *ObjectEvent) ID() int64 {
+	return e.Headers.Id
+}
+
 func (e *ObjectEvent) Tag() string {
 	return e.Headers.Tag
 }

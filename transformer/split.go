@@ -61,7 +61,7 @@ func (c *SplitTransformer) DoTransform(ctx flow.StateContext, in []flow.Event) (
 			flow.Log().Debugf("SPLIT: Drop event, subsize/fields=%d/%d", subsize, len(fields))
 			continue
 		}
-		out = append(out, events.NewStringFieldsEvent(evt, fields))
+		out = append(out, events.NewStringFieldsEvent(evt.Header(), fields))
 	}
 	return out, nil
 }

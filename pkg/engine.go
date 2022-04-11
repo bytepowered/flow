@@ -37,7 +37,7 @@ type EventEngine struct {
 }
 
 const (
-	engineConfigQueueSizeKey = "engine.queue-size"
+	engineConfigQueueSizeKey = "engine.queue_size"
 	engineConfigOrderKey     = "engine.order"
 )
 
