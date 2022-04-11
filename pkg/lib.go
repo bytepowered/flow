@@ -46,8 +46,6 @@ type Event interface {
 	Header() Header
 	// Record 返回事件记录对象
 	Record() interface{}
-	// Frames 返回事件原始数据
-	Frames() []byte
 }
 
 const (

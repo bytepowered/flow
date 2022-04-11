@@ -4,6 +4,10 @@ var (
 	KindNameMapper = make(KindNameValues, 8)
 )
 
+func SetKindNameValues(values KindNameValues) {
+	KindNameMapper = values
+}
+
 type KindNameValues map[Kind]string
 
 func (m KindNameValues) GetName(k Kind) string {
