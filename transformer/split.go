@@ -3,7 +3,6 @@ package transformer
 import (
 	"bytes"
 	"fmt"
-	"github.com/bytepowered/flow/v3/extends/events"
 	flow "github.com/bytepowered/flow/v3/pkg"
 	"github.com/bytepowered/runv"
 	"github.com/spf13/viper"
@@ -61,7 +60,7 @@ func (c *SplitTransformer) DoTransform(ctx flow.StateContext, in []flow.Event) (
 			flow.Log().Debugf("SPLIT: Drop event, subsize/fields=%d/%d", subsize, len(fields))
 			continue
 		}
-		out = append(out, events.NewStringFieldsEvent(evt.Header(), fields))
+		out = append(out, flow.NewFieldsEvent(evt.Header(), fields))
 	}
 	return out, nil
 }

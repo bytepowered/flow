@@ -1,8 +1,11 @@
 package flow
 
-import "time"
+import (
+	"bytes"
+	"time"
+)
 
-var _ Event = new(ObjectEvent)
+var _ Event = NewObjectEvent(Header{}, nil)
 
 type ObjectEvent struct {
 	Headers Header
@@ -42,20 +45,74 @@ func (e *ObjectEvent) Record() interface{} {
 	return e.object
 }
 
-//// String
+//// Text
 
-var _ Event = new(StringEvent)
+var _ Event = NewBytesEvent(Header{}, nil)
 
-type StringEvent struct {
+type BytesEvent struct {
 	*ObjectEvent
 }
 
-func NewStringEvent(header Header, data string) *StringEvent {
-	return &StringEvent{
+func NewBytesEvent(header Header, data []byte) *BytesEvent {
+	return &BytesEvent{
 		ObjectEvent: NewObjectEvent(header, data),
 	}
 }
 
-func (e *StringEvent) String() string {
+func (e *BytesEvent) Bytes() []byte {
+	return e.Record().([]byte)
+}
+
+//// Text
+
+var _ Event = NewTextEvent(Header{}, "")
+
+type TextEvent struct {
+	*ObjectEvent
+}
+
+func NewTextEvent(header Header, data string) *TextEvent {
+	return &TextEvent{
+		ObjectEvent: NewObjectEvent(header, data),
+	}
+}
+
+func (e *TextEvent) Text() string {
 	return e.Record().(string)
+}
+
+//// Fields
+
+var _ Event = NewFieldsEvent(Header{}, nil)
+
+type FieldsEvent struct {
+	*ObjectEvent
+}
+
+func NewFieldsEvent(header Header, data []string) *FieldsEvent {
+	return &FieldsEvent{
+		ObjectEvent: NewObjectEvent(header, data),
+	}
+}
+
+func (e *FieldsEvent) Fields() []string {
+	return e.Record().([]string)
+}
+
+//// Buffer
+
+var _ Event = NewBufferEvent(Header{}, nil)
+
+type BufferEvent struct {
+	*ObjectEvent
+}
+
+func NewBufferEvent(header Header, data *bytes.Buffer) *BufferEvent {
+	return &BufferEvent{
+		ObjectEvent: NewObjectEvent(header, data),
+	}
+}
+
+func (e *BufferEvent) Buffer() *bytes.Buffer {
+	return e.Record().(*bytes.Buffer)
 }
