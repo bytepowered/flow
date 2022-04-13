@@ -19,9 +19,9 @@ func (w CountInput) Tag() string {
 	return "number"
 }
 
-func (w CountInput) OnReceived(ctx context.Context, queue chan<- Event) {
+func (w CountInput) OnRead(ctx context.Context, queue chan<- Event) {
 	for i := 0; i < w.count; i++ {
-		queue <- NewStringEvent(
+		queue <- NewTextEvent(
 			Header{}, fmt.Sprintf("no: %d", i))
 	}
 }

@@ -34,7 +34,7 @@ func (n NopInput) Tag() string {
 	return "input"
 }
 
-func (n NopInput) OnReceived(ctx context.Context, queue chan<- Event) {
+func (n NopInput) OnRead(ctx context.Context, queue chan<- Event) {
 
 }
 
