@@ -53,6 +53,6 @@ func (i *StatedInput) SetTag(tag string) {
 	i.tag = tag
 }
 
-func (i *StatedInput) OnReceived(ctx context.Context, queue chan<- flow.Event) {
+func (i *StatedInput) OnRead(ctx context.Context, queue chan<- flow.Event) {
 	panic("StatedInput(ABSTRACT): not yet implemented")
 }

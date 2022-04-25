@@ -133,7 +133,7 @@ func (e *EventEngine) Serve(c context.Context) error {
 			// 确保关闭缓存队列
 			func() {
 				defer close(queue)
-				in.OnReceived(e.stateContext, queue)
+				in.OnRead(e.stateContext, queue)
 			}()
 			<-qdone // 等待消费队列完成
 		}(input, binds)
