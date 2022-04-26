@@ -36,14 +36,14 @@ func NewPipeline(input string) *Pipeline {
 	}
 }
 
-func (r *Pipeline) AddFilter(f Filter) {
-	r.filters = append(r.filters, f)
+func (p *Pipeline) AddFilter(f Filter) {
+	p.filters = append(p.filters, f)
 }
 
-func (r *Pipeline) AddTransformer(t Transformer) {
-	r.transformers = append(r.transformers, t)
+func (p *Pipeline) AddTransformer(t Transformer) {
+	p.transformers = append(p.transformers, t)
 }
 
-func (r *Pipeline) AddOutput(d Output) {
-	r.outputs = append(r.outputs, d)
+func (p *Pipeline) AddOutput(d Output) {
+	p.outputs = append(p.outputs, d)
 }

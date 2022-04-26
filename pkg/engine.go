@@ -29,7 +29,7 @@ type EventEngine struct {
 	_filters      []Filter
 	_transformers []Transformer
 	_outputs      []Output
-	_pipelines    []*Pipeline
+	_pipelines    []Pipeline
 	queueSize     uint
 	workMode      string
 	stateContext  context.Context
@@ -106,7 +106,7 @@ func (e *EventEngine) Serve(c context.Context) error {
 	defer Log().Infof("ENGINE: SERVE, stop")
 	inputwg := new(sync.WaitGroup)
 	for _, input := range e._inputs {
-		binds := make([]*Pipeline, 0, len(e._pipelines))
+		binds := make([]Pipeline, 0, len(e._pipelines))
 		for _, p := range e._pipelines {
 			if input.Tag() == p.Input {
 				binds = append(binds, p)
@@ -114,21 +114,28 @@ func (e *EventEngine) Serve(c context.Context) error {
 		}
 		// 确保每个Input至少绑定一个Pipeline
 		if len(binds) == 0 {
-			Log().Infof("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
+			Log().Warnf("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
 			continue
 		}
 		// 基于输入源Input来启动独立协程
 		inputwg.Add(1)
-		go func(in Input, binds []*Pipeline) {
+		go func(in Input, binds []Pipeline) {
 			defer inputwg.Done()
-			Log().Infof("ENGINE: START-INPUT, tag: %s", in.Tag())
-			queue := make(chan Event, e.queueSize)
+			Log().Infof("ENGINE: START-INPUT: %s", in.Tag())
+			qsize := e.queueSize
+			// Input configure
+			if ref, ok0 := in.(Configurable); ok0 {
+				if qc, ok1 := ref.OnConfigure().(InputConfig); ok1 {
+					qsize = qc.QueueSize
+				}
+			}
+			queue := make(chan Event, qsize)
 			qdone := make(chan struct{}, 0)
 			go func(qdone chan struct{}) {
 				defer close(qdone)
-				Log().Infof("ENGINE: INPUT-QUEUE-START: tag: %s", in.Tag())
-				defer Log().Infof("ENGINE: INPUT-QUEUE-STOP: tag: %s", in.Tag())
-				e.qconsume(e.stateContext, in.Tag(), binds, queue)
+				Log().Infof("ENGINE: INPUT-QUEUE-START: %s", in.Tag())
+				defer Log().Infof("ENGINE: INPUT-QUEUE-STOP: %s", in.Tag())
+				e.queueconsume(e.stateContext, in.Tag(), binds, queue)
 			}(qdone)
 			// 确保关闭缓存队列
 			func() {
@@ -142,18 +149,18 @@ func (e *EventEngine) Serve(c context.Context) error {
 	return nil
 }
 
-func (e *EventEngine) qconsume(ctx context.Context, tag string, pipelines []*Pipeline, queue <-chan Event) {
+func (e *EventEngine) queueconsume(ctx context.Context, tag string, pipelines []Pipeline, queue <-chan Event) {
 	for evt := range queue {
 		stateCtx := NewStatefulContext(ctx, StateAsync)
 		for _, bind := range pipelines {
 			if err := e.route(stateCtx, bind, evt); err != nil {
-				Log().Errorf("pipeline.route error, input: %s, error: %s", tag, err)
+				Log().Errorf("ENGINE: QUEUE-CONSUME-ERROR, input: %s, error: %s", tag, err)
 			}
 		}
 	}
 }
 
-func (e *EventEngine) route(stateCtx StateContext, pipeline *Pipeline, data Event) error {
+func (e *EventEngine) route(stateCtx StateContext, pipeline Pipeline, data Event) error {
 	next := FilterFunc(func(ctx StateContext, evt Event) (err error) {
 		// Transform
 		events := []Event{evt}
@@ -172,8 +179,8 @@ func (e *EventEngine) route(stateCtx StateContext, pipeline *Pipeline, data Even
 	return fc(stateCtx, data)
 }
 
-func (e *EventEngine) GetPipelines() []*Pipeline {
-	copied := make([]*Pipeline, len(e._pipelines))
+func (e *EventEngine) GetPipelines() []Pipeline {
+	copied := make([]Pipeline, len(e._pipelines))
 	copy(copied, e._pipelines)
 	return copied
 }
@@ -263,7 +270,7 @@ func (e *EventEngine) flat(definition PipelineDefinition) []PipelineDescriptor {
 	return descriptors
 }
 
-func (e *EventEngine) register(pipeline *Pipeline, descriptor PipelineDescriptor) *Pipeline {
+func (e *EventEngine) register(pipeline *Pipeline, descriptor PipelineDescriptor) Pipeline {
 	// filters
 	newMatcher(descriptor.Filters).on(e._filters, func(tag string, v interface{}) {
 		pipeline.AddFilter(v.(Filter))
@@ -276,7 +283,7 @@ func (e *EventEngine) register(pipeline *Pipeline, descriptor PipelineDescriptor
 	newMatcher(descriptor.Outputs).on(e._outputs, func(tag string, v interface{}) {
 		pipeline.AddOutput(v.(Output))
 	})
-	return pipeline
+	return *pipeline
 }
 
 func WithQueueSize(size uint) EventEngineOption {

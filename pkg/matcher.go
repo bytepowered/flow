@@ -18,7 +18,7 @@ func (m matcher) on(plugins interface{}, acceptor func(tag string, plg interface
 	for i := 0; i < vs.Len(); i++ {
 		elev := vs.Index(i)
 		objv := elev.Interface()
-		plg, ok := objv.(Plugin)
+		plg, ok := objv.(Pluginable)
 		assert.Must(ok, "'plugins' values must be typeof 'Plugin'")
 		tag := plg.Tag()
 		for _, pattern := range m {

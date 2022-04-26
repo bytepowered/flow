@@ -73,20 +73,20 @@ type StateContext interface {
 	State() State
 }
 
-type Plugin interface {
+type Pluginable interface {
 	// Tag 返回标识实现对象的标签
 	Tag() string
 }
 
 // Input 事件输入源
 type Input interface {
-	Plugin
+	Pluginable
 	OnRead(ctx context.Context, queue chan<- Event)
 }
 
 // Output 事件输出源
 type Output interface {
-	Plugin
+	Pluginable
 	OnSend(ctx context.Context, events ...Event)
 }
 
@@ -95,7 +95,7 @@ type FilterFunc func(ctx StateContext, event Event) error
 
 // Filter 原始Event过滤接口
 type Filter interface {
-	Plugin
+	Pluginable
 	DoFilter(next FilterFunc) FilterFunc
 }
 
@@ -106,6 +106,6 @@ type Formatter interface {
 
 // Transformer 处理Event格式转换
 type Transformer interface {
-	Plugin
+	Pluginable
 	DoTransform(ctx StateContext, in []Event) (out []Event, err error)
 }

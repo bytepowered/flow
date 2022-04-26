@@ -45,7 +45,7 @@ func (e *ObjectEvent) Record() interface{} {
 	return e.object
 }
 
-//// Text
+//// Bytes
 
 var _ Event = NewBytesEvent(Header{}, nil)
 
