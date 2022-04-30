@@ -18,6 +18,8 @@ level = "debug"
 [engine.logger.text]
 force_color = true
 pad_level = true
+disable_level_truncation = false
+disable_timestamp = false
 `
 	viper.SetConfigType("toml")
 	assert.Nil(t, SetupWithConfig(bytes.NewReader([]byte(content))), "setup")

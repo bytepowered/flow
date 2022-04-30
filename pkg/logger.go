@@ -65,15 +65,20 @@ func NewLogger() (*logrus.Logger, error) {
 	case "json":
 		formatter = &logrus.JSONFormatter{
 			PrettyPrint:      viper.GetBool("engine.logger.json.pretty"),
+			DisableTimestamp: viper.GetBool("engine.logger.json.disable_timestamp"),
 			FieldMap:         fields,
 			CallerPrettyfier: caller,
 		}
 	case "text":
 		formatter = &logrus.TextFormatter{
-			DisableColors:    viper.GetBool("engine.logger.text.disable_color"),
-			ForceColors:      viper.GetBool("engine.logger.text.force_color"),
-			PadLevelText:     viper.GetBool("engine.logger.text.pad_level"),
-			CallerPrettyfier: caller,
+			DisableColors:          viper.GetBool("engine.logger.text.disable_color"),
+			ForceColors:            viper.GetBool("engine.logger.text.force_color"),
+			ForceQuote:             viper.GetBool("engine.logger.text.force_quote"),
+			PadLevelText:           viper.GetBool("engine.logger.text.pad_level"),
+			DisableLevelTruncation: viper.GetBool("engine.logger.text.disable_level_truncation"),
+			DisableSorting:         viper.GetBool("engine.logger.text.disable_sorting"),
+			DisableTimestamp:       viper.GetBool("engine.logger.text.disable_timestamp"),
+			CallerPrettyfier:       caller,
 		}
 	}
 	level, err := logrus.ParseLevel(viper.GetString("engine.logger.level"))
