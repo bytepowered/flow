@@ -71,14 +71,14 @@ transformers = ["t1", "t2"]
 	if err := viper.ReadConfig(bytes.NewReader([]byte(content))); err != nil {
 		assert.Fail(t, "error: "+err.Error())
 	}
-	definitions := make([]PipelineDefinition, 0)
+	definitions := make([]Definition, 0)
 	assert.Nil(t, UnmarshalConfigKey("pipeline", &definitions))
 	assert.Equal(t, 2, len(definitions))
 	for _, d := range definitions {
 		assert.Equal(t, "desc", d.Description)
-		assert.Equal(t, "i1", d.Selector.InputExpr)
-		assert.Equal(t, []string{"o1", "o2"}, d.Selector.OutputsExpr)
-		assert.Equal(t, []string{"f1", "f2"}, d.Selector.FiltersExpr)
-		assert.Equal(t, []string{"t1", "t2"}, d.Selector.TransformersExpr)
+		assert.Equal(t, "i1", d.Selector.Input)
+		assert.Equal(t, []string{"o1", "o2"}, d.Selector.Outputs)
+		assert.Equal(t, []string{"f1", "f2"}, d.Selector.Filters)
+		assert.Equal(t, []string{"t1", "t2"}, d.Selector.Transformers)
 	}
 }

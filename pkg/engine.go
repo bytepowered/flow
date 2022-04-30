@@ -61,7 +61,7 @@ func (e *EventEngine) OnInit() error {
 	assert.Must(0 < len(e._inputs), "engine.inputs is required")
 	assert.Must(0 < len(e._outputs), "engine.outputs is required")
 	// 从配置文件中加载route配置项
-	groups := make([]PipelineDefinition, 0)
+	groups := make([]Definition, 0)
 	// WorkMode: 决定Engine对事件流的处理方式
 	// 1. Single: 所有组件组合为单个事件处理链；
 	// 2. Pipeline：根据Pipeline定义来定义多个事件处理链；
@@ -69,13 +69,13 @@ func (e *EventEngine) OnInit() error {
 	mode := viper.GetString("engine.workmode")
 	switch strings.ToLower(mode) {
 	case WorkModeSingle:
-		groups = append(groups, PipelineDefinition{
+		groups = append(groups, Definition{
 			Description: "run on single mode",
-			Selector: PipelineSelector{
-				InputExpr:        "*",
-				FiltersExpr:      []string{"*"},
-				TransformersExpr: []string{"*"},
-				OutputsExpr:      []string{"*"},
+			Selector: TagSelector{
+				Input:        "*",
+				Filters:      []string{"*"},
+				Transformers: []string{"*"},
+				Outputs:      []string{"*"},
 			},
 		})
 	default:
@@ -228,24 +228,25 @@ func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
 	return next
 }
 
-func (e *EventEngine) compile(definitions []PipelineDefinition) {
+func (e *EventEngine) compile(definitions []Definition) {
 	for _, definition := range definitions {
 		assert.Must(definition.Description != "", "pipeline definition, 'description' is required")
-		assert.Must(definition.Selector.InputExpr != "", "pipeline definition, selector 'input-tags' is required")
-		assert.Must(len(definition.Selector.OutputsExpr) > 0, "pipeline definition, selector 'output-tags' is required")
-		verify := func(tags []string, msg, src string) {
-			for _, t := range tags {
-				assert.Must(len(t) > 0, msg, t, src)
+		assert.Must(definition.Selector.Input != "", "pipeline definition, selector 'input-tags' is required")
+		assert.Must(len(definition.Selector.Outputs) > 0, "pipeline definition, selector 'output-tags' is required")
+		verify := func(targets []string, msg, src string) {
+			for _, target := range targets {
+				assert.Must(len(target) > 0, msg, target, src)
 			}
 		}
-		for _, pd := range e.flat(definition) {
-			assert.Must(len(pd.Input) > 0, "pipeline, 'input' tag is invalid, tag: "+pd.Input+", desc: "+definition.Description)
-			verify(pd.Filters, "pipeline, 'filter' tag is invalid, tag: %s, src: %s", pd.Input)
-			verify(pd.Transformers, "pipeline, 'transformer' tag is invalid, tag: %s, src: %s", pd.Input)
-			verify(pd.Outputs, "pipeline, 'output' tag is invalid, tag: %s, src: %s", pd.Input)
-			pipeline := NewPipeline(pd.Input)
-			Log().Infof("ENGINE: BIND-PIPELINE, input: %s, pipeline: %+v", pd.Input, pd)
-			e._pipelines = append(e._pipelines, e.register(pipeline, pd))
+		for _, df := range e.flat(definition) {
+			tag := df.Selector.Input
+			assert.Must(len(df.Selector.Input) > 0, "pipeline, 'input' tag is invalid, tag: "+tag+", desc: "+df.Description)
+			verify(df.Selector.Filters, "pipeline, 'filter' tag is invalid, tag: %s, src: %s", tag)
+			verify(df.Selector.Transformers, "pipeline, 'transformer' tag is invalid, tag: %s, src: %s", tag)
+			verify(df.Selector.Outputs, "pipeline, 'output' tag is invalid, tag: %s, src: %s", tag)
+			pipeline := NewPipeline(tag)
+			Log().Infof("ENGINE: BIND-PIPELINE, input: %s, pipeline: %+v", tag, df)
+			e._pipelines = append(e._pipelines, e.register(pipeline, df))
 		}
 	}
 }
@@ -255,32 +256,31 @@ func (e *EventEngine) statechk() error {
 	return nil
 }
 
-func (e *EventEngine) flat(definition PipelineDefinition) []PipelineDescriptor {
-	descriptors := make([]PipelineDescriptor, 0, len(e._inputs))
+func (e *EventEngine) flat(define Definition) []Definition {
+	definitions := make([]Definition, 0, len(e._inputs))
 	// 从Input实例列表中，根据Tag匹配实例对象
-	newMatcher([]string{definition.Selector.InputExpr}).on(e._inputs, func(tag string, _ interface{}) {
-		descriptors = append(descriptors, PipelineDescriptor{
-			Description:  definition.Description,
-			Input:        tag,
-			Filters:      definition.Selector.FiltersExpr,
-			Transformers: definition.Selector.TransformersExpr,
-			Outputs:      definition.Selector.OutputsExpr,
+	newMatcher([]string{define.Selector.Input}).on(e._inputs, func(tag string, _ interface{}) {
+		selector := define.Selector
+		selector.Input = tag // Update tag
+		definitions = append(definitions, Definition{
+			Description: define.Description,
+			Selector:    selector,
 		})
 	})
-	return descriptors
+	return definitions
 }
 
-func (e *EventEngine) register(pipeline *Pipeline, descriptor PipelineDescriptor) Pipeline {
+func (e *EventEngine) register(pipeline *Pipeline, define Definition) Pipeline {
 	// filters
-	newMatcher(descriptor.Filters).on(e._filters, func(tag string, v interface{}) {
+	newMatcher(define.Selector.Filters).on(e._filters, func(tag string, v interface{}) {
 		pipeline.AddFilter(v.(Filter))
 	})
 	// transformer
-	newMatcher(descriptor.Transformers).on(e._transformers, func(tag string, v interface{}) {
+	newMatcher(define.Selector.Transformers).on(e._transformers, func(tag string, v interface{}) {
 		pipeline.AddTransformer(v.(Transformer))
 	})
 	// output
-	newMatcher(descriptor.Outputs).on(e._outputs, func(tag string, v interface{}) {
+	newMatcher(define.Selector.Outputs).on(e._outputs, func(tag string, v interface{}) {
 		pipeline.AddOutput(v.(Output))
 	})
 	return *pipeline
