@@ -137,7 +137,12 @@ func (e *EventEngine) Serve(c context.Context) error {
 				defer Log().Infof("ENGINE: INPUT-QUEUE-STOP: %s", in.Tag())
 				e.queueconsume(e.stateContext, in.Tag(), binds, queue)
 			}(qdone)
-			// 确保关闭缓存队列
+			defer func() {
+				if r := recover(); r != nil {
+					panic(fmt.Errorf("ENGINE: INPUT-PANIC(%s): %+v", in.Tag(), r))
+				}
+			}()
+			// FuncCall: 确保关闭缓存队列
 			func() {
 				defer close(queue)
 				in.OnRead(e.stateContext, queue)
@@ -153,14 +158,14 @@ func (e *EventEngine) queueconsume(ctx context.Context, tag string, pipelines []
 	for evt := range queue {
 		stateCtx := NewStatefulContext(ctx, StateAsync)
 		for _, bind := range pipelines {
-			if err := e.route(stateCtx, bind, evt); err != nil {
+			if err := e.dispatch(stateCtx, bind, evt); err != nil {
 				Log().Errorf("ENGINE: QUEUE-CONSUME-ERROR, input: %s, error: %s", tag, err)
 			}
 		}
 	}
 }
 
-func (e *EventEngine) route(stateCtx StateContext, pipeline Pipeline, data Event) error {
+func (e *EventEngine) dispatch(stateCtx StateContext, pipeline Pipeline, data Event) error {
 	next := FilterFunc(func(ctx StateContext, evt Event) (err error) {
 		// Transform
 		events := []Event{evt}
