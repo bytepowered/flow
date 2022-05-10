@@ -105,6 +105,7 @@ func (e *EventEngine) Serve(c context.Context) error {
 	Log().Infof("ENGINE: SERVE, start, input-count: %d", len(e._inputs))
 	defer Log().Infof("ENGINE: SERVE, stop")
 	inputwg := new(sync.WaitGroup)
+	// MARK 基于Input而非Pipeline，每个Input可被多个Pipeline绑定
 	for _, input := range e._inputs {
 		binds := make([]Pipeline, 0, len(e._pipelines))
 		for _, p := range e._pipelines {
