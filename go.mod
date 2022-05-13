@@ -1,6 +1,6 @@
 module github.com/bytepowered/flow/v3
 
-go 1.17
+go 1.18
 
 require (
 	github.com/bytepowered/runv v0.2.3

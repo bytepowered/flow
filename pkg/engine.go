@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/bytepowered/runv"
 	"github.com/bytepowered/runv/assert"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"strings"
 	"sync"
@@ -30,6 +31,7 @@ type EventEngine struct {
 	_transformers []Transformer
 	_outputs      []Output
 	_pipelines    []Pipeline
+	_queues       sync.Map
 	queueSize     uint
 	workMode      string
 	stateContext  context.Context
@@ -82,7 +84,7 @@ func (e *EventEngine) OnInit() error {
 		fallthrough
 	case WorkModePipeline:
 		if err := UnmarshalConfigKey("pipeline", &groups); err != nil {
-			return fmt.Errorf("load 'routers' config error: %w", err)
+			return fmt.Errorf("load 'pipeline' config error: %w", err)
 		}
 	}
 	e.compile(groups)
@@ -102,6 +104,12 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 }
 
 func (e *EventEngine) Serve(c context.Context) error {
+	var verbose logrus.Level
+	if viper.GetBool("verbose") {
+		verbose = logrus.InfoLevel
+	} else {
+		verbose = logrus.DebugLevel
+	}
 	Log().Infof("ENGINE: SERVE, start, input-count: %d", len(e._inputs))
 	defer Log().Infof("ENGINE: SERVE, stop")
 	inputwg := new(sync.WaitGroup)
@@ -122,7 +130,7 @@ func (e *EventEngine) Serve(c context.Context) error {
 		inputwg.Add(1)
 		go func(in Input, binds []Pipeline) {
 			defer inputwg.Done()
-			Log().Infof("ENGINE: START-INPUT: %s", in.Tag())
+			Log().Logf(verbose, "ENGINE: START-INPUT: %s", in.Tag())
 			qsize := e.queueSize
 			// Input configure
 			if ref, ok0 := in.(Configurable); ok0 {
@@ -131,19 +139,21 @@ func (e *EventEngine) Serve(c context.Context) error {
 				}
 			}
 			queue := make(chan Event, qsize)
+			e._queues.Store(in.Tag(), queue)
 			qdone := make(chan struct{}, 0)
-			go func(qdone chan struct{}) {
+			go func() {
 				defer close(qdone)
-				Log().Infof("ENGINE: INPUT-QUEUE-START: %s", in.Tag())
-				defer Log().Infof("ENGINE: INPUT-QUEUE-STOP: %s", in.Tag())
-				e.queueconsume(e.stateContext, in.Tag(), binds, queue)
-			}(qdone)
-			defer func() {
-				if r := recover(); r != nil {
-					panic(fmt.Errorf("ENGINE: INPUT-PANIC(%s): %+v", in.Tag(), r))
-				}
+				Log().Logf(verbose, "ENGINE: INPUT-QUEUE-START: %s", in.Tag())
+				defer func() {
+					Log().Logf(verbose, "ENGINE: INPUT-QUEUE-STOP: %s", in.Tag())
+					e._queues.Delete(in.Tag())
+					if r := recover(); r != nil {
+						panic(fmt.Errorf("ENGINE: INPUT-QUEUE-PANIC(%s): %+v", in.Tag(), r))
+					}
+				}()
+				e.qloop(e.stateContext, in.Tag(), binds, queue)
 			}()
-			// FuncCall: 确保关闭缓存队列
+			// 确保关闭缓存队列
 			func() {
 				defer close(queue)
 				in.OnRead(e.stateContext, queue)
@@ -155,20 +165,28 @@ func (e *EventEngine) Serve(c context.Context) error {
 	return nil
 }
 
-func (e *EventEngine) queueconsume(ctx context.Context, tag string, pipelines []Pipeline, queue <-chan Event) {
+func (e *EventEngine) qloop(ctx0 context.Context, tag string, pipelines []Pipeline, queue <-chan Event) {
+	// 消费所有队列内的事件
 	for evt := range queue {
-		stateCtx := NewStatefulContext(ctx, StateAsync)
+		assert.Must(tag == evt.Tag(), "ENGINE: Illegal event tag: %s->%s", tag, evt.Tag())
+		ctx := NewStatefulContext(ctx0, StateAsync)
 		for _, bind := range pipelines {
-			if err := e.dispatch(stateCtx, bind, evt); err != nil {
-				Log().Errorf("ENGINE: QUEUE-CONSUME-ERROR, input: %s, error: %s", tag, err)
+			if err := e.dispatch(ctx, bind, evt); err != nil {
+				Log().Errorf("ENGINE: DISPATCH-ERROR, input: %s, error: %s", tag, err)
 			}
 		}
 	}
 }
 
 func (e *EventEngine) dispatch(stateCtx StateContext, pipeline Pipeline, data Event) error {
+	ischanged := func(v Event) bool {
+		return data.Tag() != v.Tag()
+	}
+	nochanged := func(v Event) bool {
+		return data.Tag() == v.Tag()
+	}
 	next := FilterFunc(func(ctx StateContext, evt Event) (err error) {
-		// Transform
+		// 事件变换
 		events := []Event{evt}
 		for _, tf := range pipeline.transformers {
 			events, err = tf.DoTransform(ctx, events)
@@ -176,8 +194,21 @@ func (e *EventEngine) dispatch(stateCtx StateContext, pipeline Pipeline, data Ev
 				return err
 			}
 		}
+		// Tag变更则重新投递到其它Input的队列
+		changed := filterEvents(events, ischanged)
+		for _, v := range changed {
+			queue, ok := e._queues.Load(v.Tag())
+			if ok {
+				queue.(chan Event) <- v
+			}
+		}
+		// 由Output处理最终事件
+		forward := events
+		if len(changed) > 0 {
+			forward = filterEvents(events, nochanged)
+		}
 		for _, output := range pipeline.outputs {
-			output.OnSend(ctx.Context(), events...)
+			output.OnSend(ctx.Context(), forward...)
 		}
 		return nil
 	})
@@ -225,13 +256,6 @@ func (e *EventEngine) AddTransformer(v Transformer) {
 
 func (e *EventEngine) Order(state runv.State) int {
 	return viper.GetInt(engineConfigOrderKey) // 所有生命周期都靠后
-}
-
-func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
-	for i := len(filters) - 1; i >= 0; i-- {
-		next = filters[i].DoFilter(next)
-	}
-	return next
 }
 
 func (e *EventEngine) compile(definitions []Definition) {
@@ -290,6 +314,23 @@ func (e *EventEngine) register(pipeline *Pipeline, define Definition) Pipeline {
 		pipeline.AddOutput(v.(Output))
 	})
 	return *pipeline
+}
+
+func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
+	for i := len(filters) - 1; i >= 0; i-- {
+		next = filters[i].DoFilter(next)
+	}
+	return next
+}
+
+func filterEvents(events []Event, fun func(event Event) bool) []Event {
+	out := make([]Event, 0, len(events))
+	for _, v := range events {
+		if fun(v) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func WithQueueSize(size uint) EventEngineOption {

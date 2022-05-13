@@ -22,7 +22,7 @@ func (w CountInput) Tag() string {
 func (w CountInput) OnRead(ctx context.Context, queue chan<- Event) {
 	for i := 0; i < w.count; i++ {
 		queue <- NewTextEvent(
-			Header{}, fmt.Sprintf("no: %d", i))
+			Header{Tag: w.Tag()}, fmt.Sprintf("no: %d", i))
 	}
 }
 
@@ -57,7 +57,7 @@ level = "error"
 `
 	viper.SetConfigType("toml")
 	assert.Nil(t, SetupWithConfig(bytes.NewReader([]byte(content))), "setup")
-	in := &CountInput{count: 100}
+	in := &CountInput{count: 20}
 	out := &CountOutput{}
 	Register(out)
 	Register(in)
