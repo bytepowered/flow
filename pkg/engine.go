@@ -31,7 +31,7 @@ type EventEngine struct {
 	_transformers []Transformer
 	_outputs      []Output
 	_pipelines    []Pipeline
-	_queues       sync.Map
+	_mappings     map[string]Output
 	queueSize     uint
 	workMode      string
 	stateContext  context.Context
@@ -110,7 +110,12 @@ func (e *EventEngine) Serve(c context.Context) error {
 	} else {
 		verbose = logrus.DebugLevel
 	}
-	Log().Infof("ENGINE: SERVE, start, input-count: %d", len(e._inputs))
+	// 启动时初始化Output的映射
+	e._mappings = make(map[string]Output, len(e._outputs))
+	for _, output := range e._outputs {
+		e._mappings[output.Tag()] = output
+	}
+	Log().Infof("ENGINE: SERVE, start, input: %d, output: %d", len(e._inputs), len(e._outputs))
 	defer Log().Infof("ENGINE: SERVE, stop")
 	inputwg := new(sync.WaitGroup)
 	// MARK 基于Input而非Pipeline，每个Input可被多个Pipeline绑定
@@ -139,14 +144,12 @@ func (e *EventEngine) Serve(c context.Context) error {
 				}
 			}
 			queue := make(chan Event, qsize)
-			e._queues.Store(in.Tag(), queue)
 			qdone := make(chan struct{}, 0)
 			go func() {
 				defer close(qdone)
 				Log().Logf(verbose, "ENGINE: INPUT-QUEUE-START: %s", in.Tag())
 				defer func() {
 					Log().Logf(verbose, "ENGINE: INPUT-QUEUE-STOP: %s", in.Tag())
-					e._queues.Delete(in.Tag())
 					if r := recover(); r != nil {
 						panic(fmt.Errorf("ENGINE: INPUT-QUEUE-PANIC(%s): %+v", in.Tag(), r))
 					}
@@ -168,10 +171,11 @@ func (e *EventEngine) Serve(c context.Context) error {
 func (e *EventEngine) qloop(ctx0 context.Context, tag string, pipelines []Pipeline, queue <-chan Event) {
 	// 消费所有队列内的事件
 	for evt := range queue {
-		assert.Must(tag == evt.Tag(), "ENGINE: Illegal event tag: %s->%s", tag, evt.Tag())
+		assert.Must(tag == evt.Tag(), "ENGINE: Illegal event tag: %s -> %s", tag, evt.Tag())
 		ctx := NewStatefulContext(ctx0, StateAsync)
 		for _, bind := range pipelines {
-			if err := e.dispatch(ctx, bind, evt); err != nil {
+			err := e.dispatch(ctx, bind, evt)
+			if err != nil {
 				Log().Errorf("ENGINE: DISPATCH-ERROR, input: %s, error: %s", tag, err)
 			}
 		}
@@ -182,7 +186,7 @@ func (e *EventEngine) dispatch(stateCtx StateContext, pipeline Pipeline, data Ev
 	ischanged := func(v Event) bool {
 		return data.Tag() != v.Tag()
 	}
-	nochanged := func(v Event) bool {
+	nochanges := func(v Event) bool {
 		return data.Tag() == v.Tag()
 	}
 	next := FilterFunc(func(ctx StateContext, evt Event) (err error) {
@@ -194,18 +198,20 @@ func (e *EventEngine) dispatch(stateCtx StateContext, pipeline Pipeline, data Ev
 				return err
 			}
 		}
-		// Tag变更则重新投递到其它Input的队列
+		// Tag变更，投递到目标Output
 		changed := filterEvents(events, ischanged)
 		for _, v := range changed {
-			queue, ok := e._queues.Load(v.Tag())
+			output, ok := e._mappings[v.Tag()]
 			if ok {
-				queue.(chan Event) <- v
+				output.OnSend(ctx.Context(), v)
+			} else {
+				Log().Warnf("ENGINE: DEAD-EVENT, input: %s, to: %s", evt.Tag(), v.Tag())
 			}
 		}
-		// 由Output处理最终事件
+		// 由Pipeline定义的Output处理事件
 		forward := events
 		if len(changed) > 0 {
-			forward = filterEvents(events, nochanged)
+			forward = filterEvents(events, nochanges)
 		}
 		for _, output := range pipeline.outputs {
 			output.OnSend(ctx.Context(), forward...)
