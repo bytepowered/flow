@@ -63,13 +63,10 @@ func TestMatchWildcard(t *testing.T) {
 }
 
 func doTestMatcher(t *testing.T, tags []string, expected int) {
-	wc := newMatcher(tags)
 	count := 0
-	wc.on([]interface{}{
-		new(matchFilter), new(matchOutput), new(matchTransformer),
-	}, func(tag string, plugin interface{}) {
-		assert.NotNil(t, plugin, "accepted plugin must not nil")
-		count++
-	})
+	matches(tags, []Pluginable{new(matchFilter), new(matchOutput), new(matchTransformer)},
+		func(tag string, plg Pluginable) {
+			count++
+		})
 	assert.Equal(t, expected, count, "count not match")
 }

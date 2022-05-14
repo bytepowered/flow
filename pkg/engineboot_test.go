@@ -9,44 +9,44 @@ import (
 	"testing"
 )
 
-var _ Input = new(CountInput)
+var _ Input = new(CounterInput)
 
-type CountInput struct {
+type CounterInput struct {
 	count int
 }
 
-func (w CountInput) Tag() string {
-	return "number"
+func (w CounterInput) Tag() string {
+	return "counter"
 }
 
-func (w CountInput) OnRead(ctx context.Context, queue chan<- Event) {
+func (w CounterInput) OnRead(ctx context.Context, queue chan<- Event) {
 	for i := 0; i < w.count; i++ {
 		queue <- NewTextEvent(
 			Header{Tag: w.Tag()}, fmt.Sprintf("no: %d", i))
 	}
 }
 
-var _ Output = new(CountOutput)
+var _ Output = new(CounterOutput)
 
-type CountOutput struct {
+type CounterOutput struct {
 	count int
 }
 
-func (o *CountOutput) Tag() string {
-	return "wait"
+func (o *CounterOutput) Tag() string {
+	return "counter"
 }
 
-func (o *CountOutput) OnSend(ctx context.Context, events ...Event) {
+func (o *CounterOutput) OnSend(ctx context.Context, events ...Event) {
 	for range events {
 		o.count++
 	}
 }
 
-func (o *CountOutput) Reset() {
+func (o *CounterOutput) Reset() {
 	o.count = 0
 }
 
-func TestEngineServe(t *testing.T) {
+func TestSingleEngineServe(t *testing.T) {
 	content := `
 [engine]
 workmode = "single"
@@ -57,8 +57,8 @@ level = "error"
 `
 	viper.SetConfigType("toml")
 	assert.Nil(t, SetupWithConfig(bytes.NewReader([]byte(content))), "setup")
-	in := &CountInput{count: 20}
-	out := &CountOutput{}
+	in := &CounterInput{count: 20}
+	out := &CounterOutput{}
 	Register(out)
 	Register(in)
 	Execute(WithQueueSize(10))

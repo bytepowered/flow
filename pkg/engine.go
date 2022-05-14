@@ -71,13 +71,11 @@ func (e *EventEngine) OnInit() error {
 	mode := viper.GetString("engine.workmode")
 	switch strings.ToLower(mode) {
 	case WorkModeSingle:
+		wildcard := []string{"*"}
 		groups = append(groups, Definition{
 			Description: "run on single mode",
 			Selector: TagSelector{
-				Input:        "*",
-				Filters:      []string{"*"},
-				Transformers: []string{"*"},
-				Outputs:      []string{"*"},
+				Input: "*", Filters: wildcard, Transformers: wildcard, Outputs: wildcard,
 			},
 		})
 	default:
@@ -300,7 +298,7 @@ func (e *EventEngine) statechk() error {
 func (e *EventEngine) flat(define Definition) []Definition {
 	definitions := make([]Definition, 0, len(e._inputs))
 	// 从Input实例列表中，根据Tag匹配实例对象
-	newMatcher([]string{define.Selector.Input}).on(e._inputs, func(tag string, _ interface{}) {
+	matches([]string{define.Selector.Input}, e._inputs, func(tag string, in Input) {
 		selector := define.Selector
 		selector.Input = tag // Update tag
 		definitions = append(definitions, Definition{
@@ -313,16 +311,16 @@ func (e *EventEngine) flat(define Definition) []Definition {
 
 func (e *EventEngine) initialize(pipeline *Pipeline, define Definition) Pipeline {
 	// filters
-	newMatcher(define.Selector.Filters).on(e._filters, func(tag string, v interface{}) {
-		pipeline.AddFilter(v.(Filter))
+	matches(define.Selector.Filters, e._filters, func(tag string, plg Filter) {
+		pipeline.AddFilter(plg)
 	})
 	// transformer
-	newMatcher(define.Selector.Transformers).on(e._transformers, func(tag string, v interface{}) {
-		pipeline.AddTransformer(v.(Transformer))
+	matches(define.Selector.Transformers, e._transformers, func(tag string, plg Transformer) {
+		pipeline.AddTransformer(plg)
 	})
 	// output
-	newMatcher(define.Selector.Outputs).on(e._outputs, func(tag string, v interface{}) {
-		pipeline.AddOutput(v.(Output))
+	matches(define.Selector.Outputs, e._outputs, func(tag string, plg Output) {
+		pipeline.AddOutput(plg)
 	})
 	return *pipeline
 }
