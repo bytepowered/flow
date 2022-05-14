@@ -192,32 +192,32 @@ func (e *EventEngine) dispatch(evtctx StateContext, pipeline Pipeline, data Even
 	nochanges := func(v Event) bool {
 		return data.Tag() == v.Tag()
 	}
-	next := FilterFunc(func(ctx StateContext, evt Event) (err error) {
+	next := FilterFunc(func(ctx StateContext, src Event) (err error) {
 		// 事件变换
-		events := []Event{evt}
+		events := []Event{src}
 		for _, tf := range pipeline.transformers {
 			events, err = tf.DoTransform(ctx, events)
 			if err != nil {
 				return err
 			}
 		}
-		// Tag变更，投递到目标Output
-		changed := filterEvents(events, ischanged)
-		for _, v := range changed {
-			output, ok := e._mappings[v.Tag()]
-			if ok {
-				output.OnSend(ctx.Context(), v)
-			} else {
-				Log().Warnf("ENGINE: DEAD-EVENT, input: %s, to: %s", evt.Tag(), v.Tag())
-			}
+		redispatch := filterEvents(events, ischanged)
+		direct := events
+		if len(redispatch) > 0 {
+			direct = filterEvents(events, nochanges)
 		}
-		// 由Pipeline定义的Output处理事件
-		forward := events
-		if len(changed) > 0 {
-			forward = filterEvents(events, nochanges)
-		}
+		// S1: 由Pipeline定义的Output处理
 		for _, output := range pipeline.outputs {
-			output.OnSend(ctx.Context(), forward...)
+			output.OnSend(ctx, direct...)
+		}
+		// S2: 如果事件的Tag变更，投递到目标Output
+		for _, evt := range redispatch {
+			output, ok := e._mappings[evt.Tag()]
+			if ok {
+				output.OnSend(ctx, evt)
+			} else {
+				Log().Warnf("ENGINE: DEAD-EVENT, input: %s, to: %s", src.Tag(), evt.Tag())
+			}
 		}
 		return nil
 	})

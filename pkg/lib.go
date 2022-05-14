@@ -91,7 +91,7 @@ type Input interface {
 // Output 事件输出源
 type Output interface {
 	Pluginable
-	OnSend(ctx context.Context, events ...Event)
+	OnSend(ctx StateContext, events ...Event)
 }
 
 // FilterFunc 执行过滤原始Event的函数；
