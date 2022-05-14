@@ -51,6 +51,10 @@ type Event interface {
 	Record() interface{}
 }
 
+type StateContextable interface {
+	Context() StateContext
+}
+
 const (
 	StateNop   State = 0x00000000
 	StateAsync State = 0x00000001

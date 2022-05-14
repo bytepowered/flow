@@ -16,7 +16,7 @@ type StatefulContext struct {
 	ctx context.Context
 }
 
-func NewStatefulContext(ctx context.Context, state State) StateContext {
+func NewStateContext(ctx context.Context, state State) StateContext {
 	return &StatefulContext{
 		ctx: context.WithValue(ctx, hiddenKey, state),
 	}

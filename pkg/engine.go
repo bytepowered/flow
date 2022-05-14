@@ -34,7 +34,7 @@ type EventEngine struct {
 	_mappings     map[string]Output
 	queueSize     uint
 	workMode      string
-	stateContext  context.Context
+	stateCtx      context.Context
 	stateFunc     context.CancelFunc
 }
 
@@ -48,7 +48,7 @@ func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 	viper.SetDefault(engineConfigOrderKey, 10000)
 	ctx, ctxfunc := context.WithCancel(context.Background())
 	engine := &EventEngine{
-		stateContext: ctx, stateFunc: ctxfunc,
+		stateCtx: ctx, stateFunc: ctxfunc,
 		queueSize: viper.GetUint(engineConfigQueueSizeKey),
 	}
 	for _, opt := range opts {
@@ -103,7 +103,7 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (e *EventEngine) Serve(c context.Context) error {
+func (e *EventEngine) Serve(_ context.Context) error {
 	var verbose logrus.Level
 	if viper.GetBool("verbose") {
 		verbose = logrus.InfoLevel
@@ -115,66 +115,71 @@ func (e *EventEngine) Serve(c context.Context) error {
 	for _, output := range e._outputs {
 		e._mappings[output.Tag()] = output
 	}
-	Log().Infof("ENGINE: SERVE, start, input: %d, output: %d", len(e._inputs), len(e._outputs))
-	defer Log().Infof("ENGINE: SERVE, stop")
-	inputwg := new(sync.WaitGroup)
-	// MARK 基于Input而非Pipeline，每个Input可被多个Pipeline绑定
-	for _, input := range e._inputs {
-		binds := make([]Pipeline, 0, len(e._pipelines))
+	getbinds := func(tag string) []Pipeline {
+		out := make([]Pipeline, 0, len(e._pipelines))
 		for _, p := range e._pipelines {
-			if input.Tag() == p.Input {
-				binds = append(binds, p)
+			if tag == p.Input {
+				out = append(out, p)
 			}
 		}
+		return out
+	}
+	Log().Infof("ENGINE: SERVE, start, input: %d, output: %d", len(e._inputs), len(e._outputs))
+	defer Log().Infof("ENGINE: SERVE, stop")
+	inputswg := new(sync.WaitGroup)
+	// MARK 基于Input而非Pipeline，每个Input可被多个Pipeline绑定
+	for _, input := range e._inputs {
+		binds := getbinds(input.Tag())
 		// 确保每个Input至少绑定一个Pipeline
 		if len(binds) == 0 {
 			Log().Warnf("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
 			continue
 		}
-		// 基于输入源Input来启动独立协程
-		inputwg.Add(1)
-		go func(in Input, binds []Pipeline) {
-			defer inputwg.Done()
-			Log().Logf(verbose, "ENGINE: START-INPUT: %s", in.Tag())
-			qsize := e.queueSize
-			// Input configure
-			if ref, ok0 := in.(Configurable); ok0 {
-				if qc, ok1 := ref.OnConfigure().(InputConfig); ok1 {
-					qsize = qc.QueueSize
-				}
+		qsize := e.queueSize
+		if configer, ok := input.(Configurable); ok {
+			if config, is := configer.OnConfigure().(InputConfig); is {
+				qsize = config.QueueSize
 			}
-			queue := make(chan Event, qsize)
-			qdone := make(chan struct{}, 0)
-			go func() {
-				defer close(qdone)
-				Log().Logf(verbose, "ENGINE: INPUT-QUEUE-START: %s", in.Tag())
-				defer func() {
-					Log().Logf(verbose, "ENGINE: INPUT-QUEUE-STOP: %s", in.Tag())
-					if r := recover(); r != nil {
-						panic(fmt.Errorf("ENGINE: INPUT-QUEUE-PANIC(%s): %+v", in.Tag(), r))
-					}
-				}()
-				e.qloop(e.stateContext, in.Tag(), binds, queue)
+		}
+		Log().Logf(verbose, "ENGINE: START-INPUT: %s, queue: %d, binds: %d", input.Tag(), qsize, len(binds))
+		qevents := make(chan Event, qsize)
+		qdone := make(chan struct{}, 0)
+		go func(in Input, pipelines []Pipeline, inqueue <-chan Event) {
+			defer func() {
+				Log().Logf(verbose, "ENGINE: INPUT-LOOP-STOP: %s", in.Tag())
+				if r := recover(); r != nil {
+					panic(fmt.Errorf("ENGINE: INPUT-LOOP-PANIC(%s): %+v", in.Tag(), r))
+				}
 			}()
-			// 确保关闭缓存队列
-			func() {
-				defer close(queue)
-				in.OnRead(e.stateContext, queue)
-			}()
-			<-qdone // 等待消费队列完成
-		}(input, binds)
+			defer close(qdone)
+			Log().Logf(verbose, "ENGINE: INPUT-LOOP-START: %s", in.Tag())
+			e.qloop(e.stateCtx, in.Tag(), pipelines, inqueue)
+		}(input, binds, qevents)
+		// 基于输入源Input来启动独立协程
+		inputswg.Add(1)
+		go func(in Input) {
+			defer inputswg.Done()
+			defer close(qevents)
+			in.OnRead(e.stateCtx, qevents)
+		}(input)
+		<-qdone
 	}
-	inputwg.Wait()
+	inputswg.Wait()
 	return nil
 }
 
-func (e *EventEngine) qloop(ctx0 context.Context, tag string, pipelines []Pipeline, queue <-chan Event) {
+func (e *EventEngine) qloop(stateCtx context.Context, tag string, pipelines []Pipeline, events <-chan Event) {
 	// 消费所有队列内的事件
-	for evt := range queue {
-		assert.Must(tag == evt.Tag(), "ENGINE: Illegal event tag: %s -> %s", tag, evt.Tag())
-		ctx := NewStatefulContext(ctx0, StateAsync)
-		for _, bind := range pipelines {
-			err := e.dispatch(ctx, bind, evt)
+	for recv := range events {
+		assert.Must(tag == recv.Tag(), "ENGINE: BAD-EVENT-TAG: %s -> %s", tag, recv.Tag())
+		var evtctx StateContext
+		if genctx, ok := recv.(StateContextable); ok {
+			evtctx = genctx.Context()
+		} else {
+			evtctx = NewStateContext(stateCtx, StateSync)
+		}
+		for _, pipe := range pipelines {
+			err := e.dispatch(evtctx, pipe, recv)
 			if err != nil {
 				Log().Errorf("ENGINE: DISPATCH-ERROR, input: %s, error: %s", tag, err)
 			}
@@ -182,7 +187,7 @@ func (e *EventEngine) qloop(ctx0 context.Context, tag string, pipelines []Pipeli
 	}
 }
 
-func (e *EventEngine) dispatch(stateCtx StateContext, pipeline Pipeline, data Event) error {
+func (e *EventEngine) dispatch(evtctx StateContext, pipeline Pipeline, data Event) error {
 	ischanged := func(v Event) bool {
 		return data.Tag() != v.Tag()
 	}
@@ -219,7 +224,7 @@ func (e *EventEngine) dispatch(stateCtx StateContext, pipeline Pipeline, data Ev
 		return nil
 	})
 	fc := makeFilterChain(next, pipeline.filters)
-	return fc(stateCtx, data)
+	return fc(evtctx, data)
 }
 
 func (e *EventEngine) GetPipelines() []Pipeline {
@@ -282,7 +287,7 @@ func (e *EventEngine) compile(definitions []Definition) {
 			verify(df.Selector.Outputs, "pipeline, 'output' tag is invalid, tag: %s, src: %s", tag)
 			pipeline := NewPipeline(tag)
 			Log().Infof("ENGINE: BIND-PIPELINE, input: %s, pipeline: %+v", tag, df)
-			e._pipelines = append(e._pipelines, e.register(pipeline, df))
+			e._pipelines = append(e._pipelines, e.initialize(pipeline, df))
 		}
 	}
 }
@@ -306,7 +311,7 @@ func (e *EventEngine) flat(define Definition) []Definition {
 	return definitions
 }
 
-func (e *EventEngine) register(pipeline *Pipeline, define Definition) Pipeline {
+func (e *EventEngine) initialize(pipeline *Pipeline, define Definition) Pipeline {
 	// filters
 	newMatcher(define.Selector.Filters).on(e._filters, func(tag string, v interface{}) {
 		pipeline.AddFilter(v.(Filter))
@@ -329,10 +334,10 @@ func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
 	return next
 }
 
-func filterEvents(events []Event, fun func(event Event) bool) []Event {
+func filterEvents(events []Event, tester func(event Event) bool) []Event {
 	out := make([]Event, 0, len(events))
 	for _, v := range events {
-		if fun(v) {
+		if tester(v) {
 			out = append(out, v)
 		}
 	}
