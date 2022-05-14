@@ -36,7 +36,7 @@ func (o *CounterOutput) Tag() string {
 	return "counter"
 }
 
-func (o *CounterOutput) OnSend(ctx context.Context, events ...Event) {
+func (o *CounterOutput) OnSend(ctx StateContext, events ...Event) {
 	for range events {
 		o.count++
 	}

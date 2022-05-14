@@ -2,7 +2,6 @@ package flow
 
 import (
 	"bytes"
-	"context"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -28,7 +27,7 @@ func (t ptOutput) Tag() string {
 	panic("implement me")
 }
 
-func (t ptOutput) OnSend(ctx context.Context, events ...Event) {
+func (t ptOutput) OnSend(ctx StateContext, events ...Event) {
 	panic("implement me")
 }
 

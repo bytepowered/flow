@@ -46,7 +46,7 @@ func (n NopOutput) Tag() string {
 	return "output"
 }
 
-func (n NopOutput) OnSend(ctx context.Context, events ...Event) {
+func (n NopOutput) OnSend(ctx StateContext, events ...Event) {
 
 }
 

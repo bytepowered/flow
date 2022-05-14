@@ -4,11 +4,14 @@ import (
 	"strings"
 )
 
-func matches[T Pluginable](patterns []string, plugins []T, consumer func(tag string, plg T)) {
+func matches[T Pluginable](patterns []string, plugins []T,
+	onfound func(tag string, plg T), onmissed func(tag string)) {
 	for _, plg := range plugins {
 		for _, pattern := range patterns {
 			if match(pattern, plg.Tag()) {
-				consumer(plg.Tag(), plg)
+				onfound(plg.Tag(), plg)
+			} else {
+				onmissed(plg.Tag())
 			}
 		}
 	}

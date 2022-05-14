@@ -1,7 +1,6 @@
 package flow
 
 import (
-	"context"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -26,7 +25,7 @@ func (t matchOutput) Tag() string {
 	return "std.output"
 }
 
-func (t matchOutput) OnSend(ctx context.Context, events ...Event) {
+func (t matchOutput) OnSend(ctx StateContext, events ...Event) {
 	panic("implement me")
 }
 
@@ -64,9 +63,13 @@ func TestMatchWildcard(t *testing.T) {
 
 func doTestMatcher(t *testing.T, tags []string, expected int) {
 	count := 0
-	matches(tags, []Pluginable{new(matchFilter), new(matchOutput), new(matchTransformer)},
+	matches(tags,
+		[]Pluginable{new(matchFilter), new(matchOutput), new(matchTransformer)},
 		func(tag string, plg Pluginable) {
 			count++
+		},
+		func(tag string) {
+			//nop
 		})
 	assert.Equal(t, expected, count, "count not match")
 }
