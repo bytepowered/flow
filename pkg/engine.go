@@ -225,10 +225,14 @@ func (e *EventEngine) dispatch(evtctx StateContext, pipeline Pipeline, data Even
 	return fc(evtctx, data)
 }
 
-func (e *EventEngine) GetPipelines() []Pipeline {
+func (e *EventEngine) Pipelines() []Pipeline {
 	copied := make([]Pipeline, len(e._pipelines))
 	copy(copied, e._pipelines)
 	return copied
+}
+
+func (e *EventEngine) AddPipeline(pipeline Pipeline) {
+	e._pipelines = append(e._pipelines, pipeline)
 }
 
 func (e *EventEngine) SetInputs(v []Input) {
@@ -285,7 +289,7 @@ func (e *EventEngine) compile(definitions []Definition) {
 			verify(df.Selector.Outputs, "pipeline, 'output' tag is invalid, tag: %s, src: %s", tag)
 			pipeline := NewPipeline(tag)
 			Log().Infof("ENGINE: BIND-PIPELINE, input: %s, pipeline: %+v", tag, df)
-			e._pipelines = append(e._pipelines, e.initialize(pipeline, df))
+			e.AddPipeline(e.initialize(pipeline, df))
 		}
 	}
 }
