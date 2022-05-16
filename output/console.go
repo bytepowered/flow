@@ -1,7 +1,6 @@
 package output
 
 import (
-	"context"
 	flow "github.com/bytepowered/flow/v3/pkg"
 	"github.com/bytepowered/runv"
 	"github.com/sirupsen/logrus"
@@ -42,7 +41,7 @@ func (c *ConsoleWriter) Tag() string {
 	return consoleTag
 }
 
-func (c *ConsoleWriter) OnSend(ctx context.Context, events ...flow.Event) {
+func (c *ConsoleWriter) OnSend(ctx flow.StateContext, events ...flow.Event) {
 	for _, evt := range events {
 		if c.ShowHeader {
 			flow.Log().WithField("header", evt.Header()).Log(c.Level, evt.Record())
