@@ -141,7 +141,7 @@ func (e *EventEngine) Serve(_ context.Context) error {
 		}
 		Log().Logf(verbose, "ENGINE: START-INPUT: %s, queue: %d, binds: %d", input.Tag(), qsize, len(binds))
 		qevents := make(chan Event, qsize)
-		qdone := make(chan struct{}, 0)
+		// GO1: Input consume queue loop
 		go func(in Input, pipelines []Pipeline, inqueue <-chan Event) {
 			defer func() {
 				Log().Logf(verbose, "ENGINE: INPUT-LOOP-STOP: %s", in.Tag())
@@ -149,18 +149,16 @@ func (e *EventEngine) Serve(_ context.Context) error {
 					panic(fmt.Errorf("ENGINE: INPUT-LOOP-PANIC(%s): %+v", in.Tag(), r))
 				}
 			}()
-			defer close(qdone)
 			Log().Logf(verbose, "ENGINE: INPUT-LOOP-START: %s", in.Tag())
 			e.qloop(e.stateCtx, in.Tag(), pipelines, inqueue)
 		}(input, binds, qevents)
-		// 基于输入源Input来启动独立协程
+		// GO2: Input read loop
 		inputswg.Add(1)
-		go func(in Input) {
+		go func(in Input, inqueue chan<- Event) {
 			defer inputswg.Done()
 			defer close(qevents)
-			in.OnRead(e.stateCtx, qevents)
-		}(input)
-		<-qdone
+			in.OnRead(e.stateCtx, inqueue)
+		}(input, qevents)
 	}
 	inputswg.Wait()
 	return nil
@@ -317,22 +315,16 @@ func (e *EventEngine) flat(define Definition) []Definition {
 
 func (e *EventEngine) initialize(pipeline *Pipeline, define Definition) Pipeline {
 	// filters
-	matches(define.Selector.Filters, e._filters, func(tag string, plg Filter) {
+	lookup(define.Selector.Filters, e._filters, func(tag string, plg Filter) {
 		pipeline.AddFilter(plg)
-	}, func(tag string) {
-		panic(fmt.Errorf("engine.pipeline definition.filter(%s) not found", tag))
 	})
 	// transformer
-	matches(define.Selector.Transformers, e._transformers, func(tag string, plg Transformer) {
+	lookup(define.Selector.Transformers, e._transformers, func(tag string, plg Transformer) {
 		pipeline.AddTransformer(plg)
-	}, func(tag string) {
-		panic(fmt.Errorf("engine.pipeline definition.transformer(%s) not found", tag))
 	})
 	// output
-	matches(define.Selector.Outputs, e._outputs, func(tag string, plg Output) {
+	lookup(define.Selector.Outputs, e._outputs, func(tag string, plg Output) {
 		pipeline.AddOutput(plg)
-	}, func(tag string) {
-		panic(fmt.Errorf("engine.pipeline definition.output(%s) not found", tag))
 	})
 	return *pipeline
 }
