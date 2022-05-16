@@ -317,22 +317,16 @@ func (e *EventEngine) flat(define Definition) []Definition {
 
 func (e *EventEngine) initialize(pipeline *Pipeline, define Definition) Pipeline {
 	// filters
-	matches(define.Selector.Filters, e._filters, func(tag string, plg Filter) {
+	lookup(define.Selector.Filters, e._filters, func(tag string, plg Filter) {
 		pipeline.AddFilter(plg)
-	}, func(tag string) {
-		panic(fmt.Errorf("engine.pipeline definition.filter(%s) not found", tag))
 	})
 	// transformer
-	matches(define.Selector.Transformers, e._transformers, func(tag string, plg Transformer) {
+	lookup(define.Selector.Transformers, e._transformers, func(tag string, plg Transformer) {
 		pipeline.AddTransformer(plg)
-	}, func(tag string) {
-		panic(fmt.Errorf("engine.pipeline definition.transformer(%s) not found", tag))
 	})
 	// output
-	matches(define.Selector.Outputs, e._outputs, func(tag string, plg Output) {
+	lookup(define.Selector.Outputs, e._outputs, func(tag string, plg Output) {
 		pipeline.AddOutput(plg)
-	}, func(tag string) {
-		panic(fmt.Errorf("engine.pipeline definition.output(%s) not found", tag))
 	})
 	return *pipeline
 }
