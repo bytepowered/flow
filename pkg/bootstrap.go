@@ -10,6 +10,8 @@ import (
 	"syscall"
 )
 
+var _enx *EventEngine
+
 func Setup() error {
 	SetConfigDefaults()
 	if err := viper.ReadInConfig(); err != nil {
@@ -53,7 +55,23 @@ func Execute(opts ...EventEngineOption) {
 	run(opts...)
 }
 
+func Engine() *EventEngine {
+	return _enx
+}
+
 func run(opts ...EventEngineOption) {
-	runv.Add(NewEventEngine(opts...))
+	_enx = NewEventEngine(opts...)
+	for _, comp := range runv.Objects() {
+		if i, ok := comp.(Input); ok {
+			_enx.AddInput(i)
+		} else if f, ok := comp.(Filter); ok {
+			_enx.AddFilter(f)
+		} else if t, ok := comp.(Transformer); ok {
+			_enx.AddTransformer(t)
+		} else if o, ok := comp.(Output); ok {
+			_enx.AddOutput(o)
+		}
+	}
+	runv.Add(_enx)
 	runv.RunV()
 }
