@@ -1,9 +1,8 @@
-module github.com/bytepowered/flow/v3
+module github.com/bytepowered/flow/v4
 
 go 1.18
 
 require (
-	github.com/bytepowered/runv v0.3.0
 	github.com/mitchellh/mapstructure v1.4.2
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/viper v1.9.0

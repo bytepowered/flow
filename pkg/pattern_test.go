@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"context"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -25,7 +26,7 @@ func (t matchOutput) Tag() string {
 	return "std.output"
 }
 
-func (t matchOutput) OnSend(ctx StateContext, events ...Event) {
+func (t matchOutput) OnSend(ctx context.Context, events ...Event) {
 	panic("implement me")
 }
 
@@ -35,7 +36,7 @@ func (t matchTransformer) Tag() string {
 	return "transformer"
 }
 
-func (t matchTransformer) DoTransform(ctx StateContext, in []Event) (out []Event, err error) {
+func (t matchTransformer) DoTransform(ctx context.Context, in []Event) (out []Event, err error) {
 	panic("implement me")
 }
 

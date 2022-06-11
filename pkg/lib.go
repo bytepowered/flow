@@ -13,13 +13,6 @@ func (k Kind) String() string {
 	return KindNameMapper.GetName(k)
 }
 
-// State 表示Event状态
-type State int
-
-func (s State) Is(state State) bool {
-	return int(s)&int(state) != 0
-}
-
 var _ fmt.Stringer = new(Header)
 
 // Header 事件Header
@@ -51,32 +44,6 @@ type Event interface {
 	Record() interface{}
 }
 
-type StateContextable interface {
-	Context() StateContext
-}
-
-const (
-	StateNop   State = 0x00000000
-	StateAsync State = 0x00000001
-	StateSync  State = 0x00000002
-	//StateX     State = 0x00000004
-	//StateXX    State = 0x00000008
-)
-
-// StateContext 发生Event的上下文
-type StateContext interface {
-	// Context 返回Context
-	Context() context.Context
-	// Var 获取Context设定的变量；
-	// 属于Context().Value()方法的快捷方式。
-	Var(key interface{}) interface{}
-	// VarE 获取Context设定的变量，返回变量是否存在。
-	// 属于Context().Value()方法的快捷方式。
-	VarE(key interface{}) (interface{}, bool)
-	//State 返回当前Event的状态
-	State() State
-}
-
 type Pluginable interface {
 	// Tag 返回标识实现对象的标签
 	Tag() string
@@ -91,11 +58,11 @@ type Input interface {
 // Output 事件输出源
 type Output interface {
 	Pluginable
-	OnSend(ctx StateContext, events ...Event)
+	OnSend(ctx context.Context, events ...Event)
 }
 
 // FilterFunc 执行过滤原始Event的函数；
-type FilterFunc func(ctx StateContext, event Event) error
+type FilterFunc func(ctx context.Context, event Event) error
 
 // Filter 原始Event过滤接口
 type Filter interface {
@@ -103,13 +70,8 @@ type Filter interface {
 	DoFilter(next FilterFunc) FilterFunc
 }
 
-// Formatter Event格式处理，用于将字节流转换为事件对象。
-type Formatter interface {
-	DoFormat(ctx context.Context, intag string, data []byte) (Event, error)
-}
-
 // Transformer 处理Event格式转换
 type Transformer interface {
 	Pluginable
-	DoTransform(ctx StateContext, in []Event) (out []Event, err error)
+	DoTransform(ctx context.Context, in []Event) (out []Event, err error)
 }

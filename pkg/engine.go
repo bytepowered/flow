@@ -3,8 +3,6 @@ package flow
 import (
 	"context"
 	"fmt"
-	"github.com/bytepowered/runv"
-	"github.com/bytepowered/runv/assert"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"strings"
@@ -12,10 +10,8 @@ import (
 )
 
 var (
-	_ runv.Initable  = new(EventEngine)
-	_ runv.Liveness  = new(EventEngine)
-	_ runv.Liveorder = new(EventEngine)
-	_ runv.Servable  = new(EventEngine)
+	_ Initable = new(EventEngine)
+	_ Servable = new(EventEngine)
 )
 
 const (
@@ -54,14 +50,13 @@ func NewEventEngine(opts ...EventEngineOption) *EventEngine {
 	for _, opt := range opts {
 		opt(engine)
 	}
-	runv.AddPostHook(engine.statechk)
 	return engine
 }
 
 func (e *EventEngine) OnInit() error {
 	Log().Infof("ENGINE: INIT")
-	assert.Must(0 < len(e._inputs), "engine.inputs is required")
-	assert.Must(0 < len(e._outputs), "engine.outputs is required")
+	Must(0 < len(e._inputs), "engine.inputs is required")
+	Must(0 < len(e._outputs), "engine.outputs is required")
 	// 从配置文件中加载route配置项
 	groups := make([]Definition, 0)
 	// WorkMode: 决定Engine对事件流的处理方式
@@ -167,15 +162,9 @@ func (e *EventEngine) Serve(_ context.Context) error {
 func (e *EventEngine) qloop(stateCtx context.Context, tag string, pipelines []Pipeline, events <-chan Event) {
 	// 消费所有队列内的事件
 	for recv := range events {
-		assert.Must(tag == recv.Tag(), "ENGINE: BAD-EVENT-TAG: %s -> %s", tag, recv.Tag())
-		var evtctx StateContext
-		if genctx, ok := recv.(StateContextable); ok {
-			evtctx = genctx.Context()
-		} else {
-			evtctx = NewStateContext(stateCtx, StateSync)
-		}
+		Must(tag == recv.Tag(), "ENGINE: BAD-EVENT-TAG: %s -> %s", tag, recv.Tag())
 		for _, pipe := range pipelines {
-			err := e.dispatch(evtctx, pipe, recv)
+			err := e.dispatch(stateCtx, pipe, recv)
 			if err != nil {
 				Log().Errorf("ENGINE: DISPATCH-ERROR, input: %s, error: %s", tag, err)
 			}
@@ -183,14 +172,8 @@ func (e *EventEngine) qloop(stateCtx context.Context, tag string, pipelines []Pi
 	}
 }
 
-func (e *EventEngine) dispatch(evtctx StateContext, pipeline Pipeline, data Event) error {
-	ischanged := func(v Event) bool {
-		return data.Tag() != v.Tag()
-	}
-	nochanges := func(v Event) bool {
-		return data.Tag() == v.Tag()
-	}
-	next := FilterFunc(func(ctx StateContext, src Event) (err error) {
+func (e *EventEngine) dispatch(evtctx context.Context, pipeline Pipeline, data Event) error {
+	next := FilterFunc(func(ctx context.Context, src Event) (err error) {
 		// 事件变换
 		events := []Event{src}
 		for _, tf := range pipeline.transformers {
@@ -199,17 +182,12 @@ func (e *EventEngine) dispatch(evtctx StateContext, pipeline Pipeline, data Even
 				return err
 			}
 		}
-		redispatch := filterEvents(events, ischanged)
-		direct := events
-		if len(redispatch) > 0 {
-			direct = filterEvents(events, nochanges)
-		}
 		// S1: 由Pipeline定义的Output处理
 		for _, output := range pipeline.outputs {
-			output.OnSend(ctx, direct...)
+			output.OnSend(ctx, events...)
 		}
 		// S2: 如果事件的Tag变更，投递到目标Output
-		for _, evt := range redispatch {
+		for _, evt := range events {
 			output, ok := e._mappings[evt.Tag()]
 			if ok {
 				output.OnSend(ctx, evt)
@@ -265,23 +243,19 @@ func (e *EventEngine) AddTransformer(v Transformer) {
 	e.SetTransformers(append(e._transformers, v))
 }
 
-func (e *EventEngine) Order(state runv.State) int {
-	return viper.GetInt(engineConfigOrderKey) // 所有生命周期都靠后
-}
-
 func (e *EventEngine) compile(definitions []Definition) {
 	for _, definition := range definitions {
-		assert.Must(definition.Description != "", "pipeline definition, 'description' is required")
-		assert.Must(definition.Selector.Input != "", "pipeline definition, selector 'input-tags' is required")
-		assert.Must(len(definition.Selector.Outputs) > 0, "pipeline definition, selector 'output-tags' is required")
+		Must(definition.Description != "", "pipeline definition, 'description' is required")
+		Must(definition.Selector.Input != "", "pipeline definition, selector 'input-tags' is required")
+		Must(len(definition.Selector.Outputs) > 0, "pipeline definition, selector 'output-tags' is required")
 		verify := func(targets []string, msg, src string) {
 			for _, target := range targets {
-				assert.Must(len(target) > 0, msg, target, src)
+				Must(len(target) > 0, msg, target, src)
 			}
 		}
 		for _, df := range e.flat(definition) {
 			tag := df.Selector.Input
-			assert.Must(len(df.Selector.Input) > 0, "pipeline, 'input' tag is invalid, tag: "+tag+", desc: "+df.Description)
+			Must(len(df.Selector.Input) > 0, "pipeline, 'input' tag is invalid, tag: "+tag+", desc: "+df.Description)
 			verify(df.Selector.Filters, "pipeline, 'filter' tag is invalid, tag: %s, src: %s", tag)
 			verify(df.Selector.Transformers, "pipeline, 'transformer' tag is invalid, tag: %s, src: %s", tag)
 			verify(df.Selector.Outputs, "pipeline, 'output' tag is invalid, tag: %s, src: %s", tag)
@@ -290,11 +264,6 @@ func (e *EventEngine) compile(definitions []Definition) {
 			e.AddPipeline(e.initialize(pipeline, df))
 		}
 	}
-}
-
-func (e *EventEngine) statechk() error {
-	assert.Must(0 < len(e._pipelines), "engine.pipelines is required")
-	return nil
 }
 
 func (e *EventEngine) flat(define Definition) []Definition {
@@ -334,16 +303,6 @@ func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
 		next = filters[i].DoFilter(next)
 	}
 	return next
-}
-
-func filterEvents(events []Event, tester func(event Event) bool) []Event {
-	out := make([]Event, 0, len(events))
-	for _, v := range events {
-		if tester(v) {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 func WithQueueSize(size uint) EventEngineOption {

@@ -1,24 +1,26 @@
 package flow
 
 import (
+	"bytes"
 	"fmt"
-	"github.com/bytepowered/runv"
-	"github.com/bytepowered/runv/ext"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"io"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
+var _gLogger *logrus.Logger
+
 func init() {
-	runv.SetLogger(&logrus.Logger{
+	SetLogger(&logrus.Logger{
 		Out: os.Stderr,
 		Formatter: &logrus.JSONFormatter{
 			PrettyPrint: false,
 			CallerPrettyfier: func(frame *runtime.Frame) (function string, file string) {
-				return ext.LogShortCaller(frame.Func.Name(), frame.Line), ""
+				return LogShortCaller(frame.Func.Name(), frame.Line), ""
 			},
 		},
 		Hooks:        make(logrus.LevelHooks),
@@ -29,11 +31,11 @@ func init() {
 }
 
 func Log() *logrus.Logger {
-	return runv.Log()
+	return _gLogger
 }
 
 func SetLogger(logger *logrus.Logger) {
-	runv.SetLogger(logger)
+	_gLogger = logger
 }
 
 func InitLogger() error {
@@ -58,7 +60,7 @@ func NewLogger() (*logrus.Logger, error) {
 			logrus.FieldKeyFunc:  "caller",
 		}
 		caller = func(frame *runtime.Frame) (function string, file string) {
-			return ext.LogShortCaller(frame.Func.Name(), frame.Line), ""
+			return LogShortCaller(frame.Func.Name(), frame.Line), ""
 		}
 	)
 	switch strings.ToLower(viper.GetString("engine.logger.format")) {
@@ -100,4 +102,14 @@ func NewLogger() (*logrus.Logger, error) {
 		ReportCaller: viper.GetBool("engine.logger.caller"),
 	}
 	return newLogger, nil
+}
+
+func LogShortCaller(caller string, line int) string {
+	// github.com/bytepowered/webtrigger/impl/coding.(*WebsocketMessageAdapter).OnInit
+	sbytes := []byte(caller)
+	idx := bytes.LastIndexByte(sbytes, '(')
+	if idx <= 0 {
+		return caller
+	}
+	return string(sbytes[idx:]) + ":" + strconv.Itoa(line)
 }
