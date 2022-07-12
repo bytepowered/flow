@@ -24,7 +24,7 @@ type Header struct {
 }
 
 func (h Header) String() string {
-	return fmt.Sprintf(`time: %s, tag: %s, kind: %s`,
+	return fmt.Sprintf(`timestamp: %s, tag: %s, kind: %s`,
 		time.UnixMilli(time.Duration(h.Time).Milliseconds()), h.Tag, h.Kind)
 }
 
@@ -34,14 +34,14 @@ type Event interface {
 	Tag() string
 	// Kind 返回事件类型。与 Header.Kind 一致。
 	Kind() Kind
-	// Time 返回事件发生时间。与 Header.Time 一致。
-	Time() time.Time
+	// Timestamp 返回事件发生时间。与 Header.Time 一致。
+	Timestamp() time.Time
 	// ID 返回事件ID，与 Header.Id 一致。
 	ID() int64
 	// Header 返回事件Header
 	Header() Header
-	// Record 返回事件记录对象
-	Record() interface{}
+	// Data 返回事件记录对象
+	Data() interface{}
 }
 
 type Pluginable interface {

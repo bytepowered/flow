@@ -54,7 +54,7 @@ func NewLogger() (*logrus.Logger, error) {
 	var (
 		formatter logrus.Formatter
 		fields    = logrus.FieldMap{
-			logrus.FieldKeyTime:  "time",
+			logrus.FieldKeyTime:  "timestamp",
 			logrus.FieldKeyLevel: "lv",
 			logrus.FieldKeyMsg:   "msg",
 			logrus.FieldKeyFunc:  "caller",

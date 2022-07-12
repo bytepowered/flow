@@ -108,97 +108,15 @@ func (e *EventEngine) Serve(_ context.Context) error {
 	for _, output := range e._outputs {
 		e._mappings[output.Tag()] = output
 	}
-	getbinds := func(tag string) []Pipeline {
-		out := make([]Pipeline, 0, len(e._pipelines))
-		for _, p := range e._pipelines {
-			if tag == p.Input {
-				out = append(out, p)
-			}
-		}
-		return out
-	}
 	Log().Infof("ENGINE: SERVE, start, input: %d, output: %d", len(e._inputs), len(e._outputs))
 	defer Log().Infof("ENGINE: SERVE, stop")
-	inputswg := new(sync.WaitGroup)
-	// MARK 基于Input而非Pipeline，每个Input可被多个Pipeline绑定
+	wg := new(sync.WaitGroup)
+	// 每个Input可被多个Pipeline绑定
 	for _, input := range e._inputs {
-		binds := getbinds(input.Tag())
-		// 确保每个Input至少绑定一个Pipeline
-		if len(binds) == 0 {
-			Log().Warnf("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
-			continue
-		}
-		qsize := e.queueSize
-		if configer, ok := input.(Configurable); ok {
-			if config, is := configer.OnConfigure().(InputConfig); is {
-				qsize = config.QueueSize
-			}
-		}
-		Log().Logf(verbose, "ENGINE: START-INPUT: %s, queue: %d, binds: %d", input.Tag(), qsize, len(binds))
-		qevents := make(chan Event, qsize)
-		// GO1: Input consume queue loop
-		go func(in Input, pipelines []Pipeline, inqueue <-chan Event) {
-			defer func() {
-				Log().Logf(verbose, "ENGINE: INPUT-LOOP-STOP: %s", in.Tag())
-				if r := recover(); r != nil {
-					panic(fmt.Errorf("ENGINE: INPUT-LOOP-PANIC(%s): %+v", in.Tag(), r))
-				}
-			}()
-			Log().Logf(verbose, "ENGINE: INPUT-LOOP-START: %s", in.Tag())
-			e.qloop(e.stateCtx, in.Tag(), pipelines, inqueue)
-		}(input, binds, qevents)
-		// GO2: Input read loop
-		inputswg.Add(1)
-		go func(in Input, inqueue chan<- Event) {
-			defer inputswg.Done()
-			defer close(qevents)
-			in.OnRead(e.stateCtx, inqueue)
-		}(input, qevents)
+		e.start(input, wg, verbose)
 	}
-	inputswg.Wait()
+	wg.Wait()
 	return nil
-}
-
-func (e *EventEngine) qloop(stateCtx context.Context, tag string, pipelines []Pipeline, events <-chan Event) {
-	// 消费所有队列内的事件
-	for recv := range events {
-		Must(tag == recv.Tag(), "ENGINE: BAD-EVENT-TAG: %s -> %s", tag, recv.Tag())
-		for _, pipe := range pipelines {
-			err := e.dispatch(stateCtx, pipe, recv)
-			if err != nil {
-				Log().Errorf("ENGINE: DISPATCH-ERROR, input: %s, error: %s", tag, err)
-			}
-		}
-	}
-}
-
-func (e *EventEngine) dispatch(evtctx context.Context, pipeline Pipeline, data Event) error {
-	next := FilterFunc(func(ctx context.Context, src Event) (err error) {
-		// 事件变换
-		events := []Event{src}
-		for _, tf := range pipeline.transformers {
-			events, err = tf.DoTransform(ctx, events)
-			if err != nil {
-				return err
-			}
-		}
-		// S1: 由Pipeline定义的Output处理
-		for _, output := range pipeline.outputs {
-			output.OnSend(ctx, events...)
-		}
-		// S2: 如果事件的Tag变更，投递到目标Output
-		for _, evt := range events {
-			output, ok := e._mappings[evt.Tag()]
-			if ok {
-				output.OnSend(ctx, evt)
-			} else {
-				Log().Warnf("ENGINE: DEAD-EVENT, input: %s, to: %s", src.Tag(), evt.Tag())
-			}
-		}
-		return nil
-	})
-	fc := makeFilterChain(next, pipeline.filters)
-	return fc(evtctx, data)
 }
 
 func (e *EventEngine) Pipelines() []Pipeline {
@@ -241,6 +159,80 @@ func (e *EventEngine) SetTransformers(v []Transformer) {
 
 func (e *EventEngine) AddTransformer(v Transformer) {
 	e.SetTransformers(append(e._transformers, v))
+}
+
+func (e *EventEngine) start(input Input, inputswg *sync.WaitGroup, verbose logrus.Level) {
+	find := func(tag string) []Pipeline {
+		out := make([]Pipeline, 0, len(e._pipelines))
+		for _, p := range e._pipelines {
+			if tag == p.Input {
+				out = append(out, p)
+			}
+		}
+		return out
+	}
+	binds := find(input.Tag())
+	// 确保每个Input至少绑定一个Pipeline
+	if len(binds) == 0 {
+		Log().Warnf("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
+		return
+	}
+	qsize := e.queueSize
+	if configer, ok := input.(Configurable); ok {
+		if config, is := configer.OnConfigure().(InputConfig); is {
+			qsize = config.QueueSize
+		}
+	}
+	Log().Logf(verbose, "ENGINE: START-INPUT: %s, queue: %d, binds: %d", input.Tag(), qsize, len(binds))
+	queued := make(chan Event, qsize)
+	// GO1: Consume loop
+	go func(in Input, pipelines []Pipeline, inbounds <-chan Event) {
+		defer func() {
+			Log().Infof("ENGINE: CONSUME-LOOP-STOP: %s", input.Tag())
+			if r := recover(); r != nil {
+				panic(fmt.Errorf("ENGINE: CONSUME-LOOP-PANIC(%s): %+v", input.Tag(), r))
+			}
+		}()
+		e.consume(in, pipelines, inbounds)
+	}(input, binds, queued)
+	// GO2: Read loop
+	inputswg.Add(1)
+	go func(in Input, inqueue chan<- Event) {
+		defer func() {
+			Log().Infof("ENGINE: READ-LOOP-STOP: %s", in.Tag())
+			if r := recover(); r != nil {
+				panic(fmt.Errorf("ENGINE: READ-LOOP-PANIC(%s): %+v", in.Tag(), r))
+			}
+		}()
+		defer close(queued)
+		defer inputswg.Done()
+		in.OnRead(e.stateCtx, inqueue)
+	}(input, queued)
+}
+
+func (e *EventEngine) consume(in Input, pipelines []Pipeline, inbounds <-chan Event) {
+	for inbound := range inbounds {
+		Must(in.Tag() == inbound.Tag(), "ENGINE: BAD-EVENT-TAG: %s -> %s", in.Tag(), inbound.Tag())
+		for _, pipeline := range pipelines {
+			// Filter -> Transform -> Output
+			err := makeFilterChain(func(ctx context.Context, in Event) (err error) {
+				events := []Event{in}
+				for _, tf := range pipeline.transformers {
+					events, err = tf.DoTransform(ctx, events)
+					if err != nil {
+						return err
+					}
+				}
+				for _, output := range pipeline.outputs {
+					output.OnSend(ctx, events...)
+				}
+				return nil
+			}, pipeline.filters)(e.stateCtx, inbound)
+			if err != nil {
+				Log().Errorf("ENGINE: DISPATCH-ERROR, input: %s, error: %s", in.Tag(), err)
+			}
+		}
+	}
 }
 
 func (e *EventEngine) compile(definitions []Definition) {

@@ -8,16 +8,16 @@ import (
 var _ Event = NewObjectEvent(Header{}, nil)
 
 type ObjectEvent struct {
-	Headers Header
-	object  interface{}
-	time    time.Time
+	Headers   Header
+	data      interface{}
+	timestamp time.Time
 }
 
-func NewObjectEvent(header Header, object interface{}) *ObjectEvent {
+func NewObjectEvent(header Header, data interface{}) *ObjectEvent {
 	return &ObjectEvent{
-		Headers: header,
-		object:  object,
-		time:    time.UnixMicro(time.Duration(header.Time).Microseconds()),
+		Headers:   header,
+		data:      data,
+		timestamp: time.UnixMicro(time.Duration(header.Time).Microseconds()),
 	}
 }
 
@@ -33,16 +33,16 @@ func (e *ObjectEvent) Kind() Kind {
 	return e.Headers.Kind
 }
 
-func (e *ObjectEvent) Time() time.Time {
-	return e.time
+func (e *ObjectEvent) Timestamp() time.Time {
+	return e.timestamp
 }
 
 func (e *ObjectEvent) Header() Header {
 	return e.Headers
 }
 
-func (e *ObjectEvent) Record() interface{} {
-	return e.object
+func (e *ObjectEvent) Data() interface{} {
+	return e.data
 }
 
 //// Bytes
@@ -60,7 +60,7 @@ func NewBytesEvent(header Header, data []byte) *BytesEvent {
 }
 
 func (e *BytesEvent) Bytes() []byte {
-	return e.Record().([]byte)
+	return e.Data().([]byte)
 }
 
 //// Text
@@ -78,7 +78,7 @@ func NewTextEvent(header Header, data string) *TextEvent {
 }
 
 func (e *TextEvent) Text() string {
-	return e.Record().(string)
+	return e.Data().(string)
 }
 
 //// Fields
@@ -96,7 +96,7 @@ func NewFieldsEvent(header Header, data []string) *FieldsEvent {
 }
 
 func (e *FieldsEvent) Fields() []string {
-	return e.Record().([]string)
+	return e.Data().([]string)
 }
 
 //// Buffer
@@ -114,5 +114,5 @@ func NewBufferEvent(header Header, data *bytes.Buffer) *BufferEvent {
 }
 
 func (e *BufferEvent) Buffer() *bytes.Buffer {
-	return e.Record().(*bytes.Buffer)
+	return e.Data().(*bytes.Buffer)
 }
