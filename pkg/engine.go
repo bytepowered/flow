@@ -171,60 +171,41 @@ func (e *EventEngine) start(input Input, inputswg *sync.WaitGroup, verbose logru
 		Log().Warnf("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
 		return
 	}
-	qsize := e.queueSize
-	if configer, ok := input.(Configurable); ok {
-		if config, is := configer.OnConfigure().(InputConfig); is {
-			qsize = config.QueueSize
-		}
-	}
-	Log().Logf(verbose, "ENGINE: START-INPUT: %s, queue: %d, binds: %d", input.Tag(), qsize, len(binds))
-	queued := make(chan Event, qsize)
-	// GO1: Consume loop
-	go func(in Input, pipelines []Pipeline, inbounds <-chan Event) {
-		defer func() {
-			Log().Infof("ENGINE: CONSUME-LOOP-STOP: %s", input.Tag())
-			if r := recover(); r != nil {
-				panic(fmt.Errorf("ENGINE: CONSUME-LOOP-PANIC(%s): %+v", input.Tag(), r))
-			}
-		}()
-		e.consume(in, pipelines, inbounds)
-	}(input, binds, queued)
-	// GO2: Read loop
-	inputswg.Add(1)
-	go func(in Input, inqueue chan<- Event) {
+	go func(in Input) {
 		defer func() {
 			Log().Infof("ENGINE: READ-LOOP-STOP: %s", in.Tag())
 			if r := recover(); r != nil {
 				panic(fmt.Errorf("ENGINE: READ-LOOP-PANIC(%s): %+v", in.Tag(), r))
 			}
 		}()
-		defer close(queued)
-		defer inputswg.Done()
-		in.OnRead(e.stateCtx, inqueue)
-	}(input, queued)
+		Log().Infof("ENGINE: READ-LOOP-START: %s", in.Tag())
+		in.OnRead(e.stateCtx, func(inbound Event) {
+			Must(in.Tag() == inbound.Tag(), "ENGINE: BAD-EVENT-TAG: %s -> %s", in.Tag(), inbound.Tag())
+			for _, pipeline := range e._pipelines {
+				pipeline.worker(e.wrap(pipeline, inbound))
+			}
+		})
+	}(input)
 }
 
-func (e *EventEngine) consume(in Input, pipelines []Pipeline, inbounds <-chan Event) {
-	for inbound := range inbounds {
-		Must(in.Tag() == inbound.Tag(), "ENGINE: BAD-EVENT-TAG: %s -> %s", in.Tag(), inbound.Tag())
-		for _, pipeline := range pipelines {
-			// Filter -> Transform -> Output
-			err := makeFilterChain(func(ctx context.Context, in Event) (err error) {
-				events := []Event{in}
-				for _, tf := range pipeline.transformers {
-					events, err = tf.DoTransform(ctx, events)
-					if err != nil {
-						return err
-					}
+func (e *EventEngine) wrap(pipeline Pipeline, inbound Event) func() {
+	return func() {
+		// Filter -> Transform -> Output
+		err := makeFilterChain(func(ctx context.Context, in Event) (err error) {
+			events := []Event{in}
+			for _, tf := range pipeline.transformers {
+				events, err = tf.DoTransform(ctx, events)
+				if err != nil {
+					return err
 				}
-				for _, output := range pipeline.outputs {
-					output.OnSend(ctx, events...)
-				}
-				return nil
-			}, pipeline.filters)(e.stateCtx, inbound)
-			if err != nil {
-				Log().Errorf("ENGINE: DISPATCH-ERROR, input: %s, error: %s", in.Tag(), err)
 			}
+			for _, output := range pipeline.outputs {
+				output.OnSend(ctx, events...)
+			}
+			return nil
+		}, pipeline.filters)(e.stateCtx, inbound)
+		if err != nil {
+			Log().Errorf("ENGINE: DISPATCH-ERROR, input: %s, error: %s", inbound.Tag(), err)
 		}
 	}
 }

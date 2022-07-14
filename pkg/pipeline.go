@@ -16,11 +16,14 @@ type Definition struct {
 
 ////
 
+type Worker func(task func())
+
 type Pipeline struct {
 	Input        string
 	filters      []Filter
 	transformers []Transformer
 	outputs      []Output
+	worker       Worker
 }
 
 func NewPipeline(input string) *Pipeline {
@@ -29,6 +32,7 @@ func NewPipeline(input string) *Pipeline {
 		filters:      make([]Filter, 0, 4),
 		transformers: make([]Transformer, 0, 4),
 		outputs:      make([]Output, 0, 4),
+		worker:       func(t func()) { t() },
 	}
 }
 
@@ -42,4 +46,8 @@ func (p *Pipeline) AddTransformer(t Transformer) {
 
 func (p *Pipeline) AddOutput(d Output) {
 	p.outputs = append(p.outputs, d)
+}
+
+func (p *Pipeline) SetWorker(worker Worker) {
+	p.worker = worker
 }

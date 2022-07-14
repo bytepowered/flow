@@ -49,10 +49,12 @@ type Pluginable interface {
 	Tag() string
 }
 
+type DeliverFunc func(event Event)
+
 // Input 事件输入源
 type Input interface {
 	Pluginable
-	OnRead(ctx context.Context, queue chan<- Event)
+	OnRead(ctx context.Context, deliverer DeliverFunc)
 }
 
 // Output 事件输出源
