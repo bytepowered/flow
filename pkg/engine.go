@@ -27,7 +27,6 @@ type EventEngine struct {
 	_transformers []Transformer
 	_outputs      []Output
 	_pipelines    []Pipeline
-	_mappings     map[string]Output
 	queueSize     uint
 	workMode      string
 	stateCtx      context.Context
@@ -102,11 +101,6 @@ func (e *EventEngine) Serve(_ context.Context) error {
 		verbose = logrus.InfoLevel
 	} else {
 		verbose = logrus.DebugLevel
-	}
-	// 启动时初始化Output的映射
-	e._mappings = make(map[string]Output, len(e._outputs))
-	for _, output := range e._outputs {
-		e._mappings[output.Tag()] = output
 	}
 	Log().Infof("ENGINE: SERVE, start, input: %d, output: %d", len(e._inputs), len(e._outputs))
 	defer Log().Infof("ENGINE: SERVE, stop")
