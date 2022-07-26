@@ -86,7 +86,7 @@ func (e *EventEngine) Serve(_ context.Context) error {
 	wg := new(sync.WaitGroup)
 	// 每个Input可被多个Pipeline绑定
 	for _, input := range e._inputs {
-		e.start(input)
+		e.start(input, wg)
 	}
 	wg.Wait()
 	return nil
