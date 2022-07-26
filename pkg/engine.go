@@ -3,7 +3,6 @@ package flow
 import (
 	"context"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"strings"
 	"sync"
@@ -96,18 +95,12 @@ func (e *EventEngine) Shutdown(ctx context.Context) error {
 }
 
 func (e *EventEngine) Serve(_ context.Context) error {
-	var verbose logrus.Level
-	if viper.GetBool("verbose") {
-		verbose = logrus.InfoLevel
-	} else {
-		verbose = logrus.DebugLevel
-	}
 	Log().Infof("ENGINE: SERVE, start, input: %d, output: %d", len(e._inputs), len(e._outputs))
 	defer Log().Infof("ENGINE: SERVE, stop")
 	wg := new(sync.WaitGroup)
 	// 每个Input可被多个Pipeline绑定
 	for _, input := range e._inputs {
-		e.start(input, wg, verbose)
+		e.start(input)
 	}
 	wg.Wait()
 	return nil
@@ -155,7 +148,7 @@ func (e *EventEngine) AddTransformer(v Transformer) {
 	e.SetTransformers(append(e._transformers, v))
 }
 
-func (e *EventEngine) start(input Input, inputswg *sync.WaitGroup, verbose logrus.Level) {
+func (e *EventEngine) start(input Input) {
 	find := func(tag string) []Pipeline {
 		out := make([]Pipeline, 0, len(e._pipelines))
 		for _, p := range e._pipelines {
