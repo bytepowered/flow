@@ -18,35 +18,21 @@ const (
 	WorkModePipeline = "pipeline"
 )
 
-type EventEngineOption func(*EventEngine)
-
 type EventEngine struct {
 	_inputs       []Input
 	_filters      []Filter
 	_transformers []Transformer
 	_outputs      []Output
 	_pipelines    []Pipeline
-	queueSize     uint
 	workMode      string
 	stateCtx      context.Context
 	stateFunc     context.CancelFunc
 }
 
-const (
-	engineConfigQueueSizeKey = "engine.queue_size"
-	engineConfigOrderKey     = "engine.order"
-)
-
-func NewEventEngine(opts ...EventEngineOption) *EventEngine {
-	viper.SetDefault(engineConfigQueueSizeKey, 10)
-	viper.SetDefault(engineConfigOrderKey, 10000)
+func NewEventEngine() *EventEngine {
 	ctx, ctxfunc := context.WithCancel(context.Background())
 	engine := &EventEngine{
 		stateCtx: ctx, stateFunc: ctxfunc,
-		queueSize: viper.GetUint(engineConfigQueueSizeKey),
-	}
-	for _, opt := range opts {
-		opt(engine)
 	}
 	return engine
 }
@@ -148,7 +134,7 @@ func (e *EventEngine) AddTransformer(v Transformer) {
 	e.SetTransformers(append(e._transformers, v))
 }
 
-func (e *EventEngine) start(input Input) {
+func (e *EventEngine) start(input Input, wg *sync.WaitGroup) {
 	find := func(tag string) []Pipeline {
 		out := make([]Pipeline, 0, len(e._pipelines))
 		for _, p := range e._pipelines {
@@ -164,8 +150,10 @@ func (e *EventEngine) start(input Input) {
 		Log().Warnf("ENGINE: SKIP-INPUT, NO PIPELINES, tag: %s", input.Tag())
 		return
 	}
+	wg.Add(1)
 	go func(in Input) {
 		defer func() {
+			defer wg.Done()
 			Log().Infof("ENGINE: READ-LOOP-STOP: %s", in.Tag())
 			if r := recover(); r != nil {
 				panic(fmt.Errorf("ENGINE: READ-LOOP-PANIC(%s): %+v", in.Tag(), r))
@@ -263,13 +251,4 @@ func makeFilterChain(next FilterFunc, filters []Filter) FilterFunc {
 		next = filters[i].DoFilter(next)
 	}
 	return next
-}
-
-func WithQueueSize(size uint) EventEngineOption {
-	if size == 0 {
-		size = 10
-	}
-	return func(d *EventEngine) {
-		d.queueSize = size
-	}
 }
